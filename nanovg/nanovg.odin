@@ -780,7 +780,7 @@ ResetTransform :: proc(ctx: ^Context) {
 Translate :: proc(ctx: ^Context, x, y: f32) {
 	state := __getState(ctx)
 	temp: Matrix
-	TransformTranslate(&state.xform, x, y)
+	TransformTranslate(&temp, x, y)
 	TransformPremultiply(&state.xform, temp)
 }
 
@@ -1489,7 +1489,6 @@ __flattenPaths :: proc(ctx: ^Context) {
 			}
 
 			case .Winding: {
-				// TODO check this again?
 				__pathWinding(ctx, Winding(ctx.commands[i + 1]))
 				i += 2
 			}
