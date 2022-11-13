@@ -23,7 +23,7 @@ KAPPA :: 0.5522847493
 
 Color :: [4]f32
 Matrix :: [6]f32
-Rect :: [4]f32
+// Rect :: [4]f32
 
 Image_Flag :: enum {
 	Generate_Mipmaps,
@@ -108,7 +108,7 @@ Texture_Type :: enum {
 	RGBA,
 }
 
-Scissor :: struct {
+scissor :: struct {
 	xform: Matrix,
 	extent: [2]f32,
 }
@@ -166,7 +166,7 @@ State :: struct {
 	line_cap: Line_Cap,
 	alpha: f32,
 	xform: Matrix,
-	scissor: Scissor,
+	scissor: scissor,
 
 	// font state
 	font_size: f32,
@@ -236,7 +236,7 @@ Params :: struct {
 		uptr: rawptr, 
 		paint: ^Paint, 
 		composite_operation: Composite_Operation_State, 
-		scissor: ^Scissor,
+		scissor: ^scissor,
 		fringe: f32,
 		bounds: [4]f32,
 		paths: []Path,
@@ -245,7 +245,7 @@ Params :: struct {
 		uptr: rawptr, 
 		paint: ^Paint, 
 		composite_operation: Composite_Operation_State, 
-		scissor: ^Scissor,
+		scissor: ^scissor,
 		fringe: f32,
 		stroke_width: f32,
 		paths: []Path,
@@ -254,49 +254,49 @@ Params :: struct {
 		uptr: rawptr, 
 		paint: ^Paint, 
 		composite_operation: Composite_Operation_State, 
-		scissor: ^Scissor,
+		scissor: ^scissor,
 		verts: []Vertex,
 		fringe: f32,
 	),
 }
 
-path_cache_init :: proc(c: ^Path_Cache) {
+__allocPathCache :: proc(c: ^Path_Cache) {
 	c.points = make([dynamic]Point, 0, INIT_POINTS_SIZE)
 	c.paths = make([dynamic]Path, 0, INIT_PATH_SIZE)
 	c.verts = make([dynamic]Vertex, 0, INIT_VERTS_SIZE)
 }
 
-path_cache_destroy :: proc(c: Path_Cache) {
+__deletePathCache :: proc(c: Path_Cache) {
 	delete(c.points)
 	delete(c.paths)
 	delete(c.verts)
 }
 
-set_device_pixel_ratio :: proc(ctx: ^Context, ratio: f32) {
+__setDevicePxRatio :: proc(ctx: ^Context, ratio: f32) {
 	ctx.tess_tol = 0.25 / ratio
 	ctx.dist_tol = 0.01 / ratio
 	ctx.fringe_width = 1.0 / ratio
 	ctx.device_px_ratio = ratio
 }
 
-get_state :: #force_inline proc(ctx: ^Context) -> ^State #no_bounds_check {
+__getState :: #force_inline proc(ctx: ^Context) -> ^State #no_bounds_check {
 	return &ctx.states[ctx.state_count - 1]
 }
 
-create_internal :: proc(params: Params) -> (ctx: ^Context) {
+CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 	ctx = new(Context)
 	ctx.params = params
 	ctx.commands = make([dynamic]f32, 0, INIT_COMMANDS_SIZE)
-	path_cache_init(&ctx.cache)
+	__allocPathCache(&ctx.cache)
 
-	save(ctx)
-	reset(ctx)
-	set_device_pixel_ratio(ctx, 1)
+	Save(ctx)
+	Reset(ctx)
+	__setDevicePxRatio(ctx, 1)
 
 	assert(ctx.params.render_create != nil)
 	if !ctx.params.render_create(ctx.params.user_ptr) {
-		delete_internal(ctx)
-		panic("Nanovg - create_internal failed")
+		DeleteInternal(ctx)
+		panic("Nanovg - CreateInternal failed")
 	}
 
 	w := INIT_FONTIMAGE_SIZE
@@ -309,13 +309,13 @@ create_internal :: proc(params: Params) -> (ctx: ^Context) {
 	return
 }
 
-delete_internal :: proc(ctx: ^Context) {
-	path_cache_destroy(ctx.cache)
+DeleteInternal :: proc(ctx: ^Context) {
+	__deletePathCache(ctx.cache)
 	fontstash.destroy(&ctx.fs)
 
 	for image in &ctx.font_images {
 		if image != 0 {
-			delete_image(ctx, image)
+			DeleteImage(ctx, image)
 		}
 	}
 
@@ -336,16 +336,16 @@ delete_internal :: proc(ctx: ^Context) {
 	frame buffer size. In that case you would set windowWidth/Height to the window size
 	devicePixelRatio to: frameBufferWidth / windowWidth.
 */
-begin_frame :: proc(
+BeginFrame :: proc(
 	ctx: ^Context,
 	window_width: f32,
 	window_height: f32,
 	device_pixel_ratio: f32,
 ) {
 	ctx.state_count = 0
-	save(ctx)
-	reset(ctx)
-	set_device_pixel_ratio(ctx, device_pixel_ratio)
+	Save(ctx)
+	Reset(ctx)
+	__setDevicePxRatio(ctx, device_pixel_ratio)
 
 	assert(ctx.params.render_viewport != nil)
 	ctx.params.render_viewport(ctx.params.user_ptr, window_width, window_height, device_pixel_ratio)
@@ -358,13 +358,13 @@ begin_frame :: proc(
 }
 
 // Cancels drawing the current frame.
-cancel_frame :: proc(ctx: ^Context) {
+CancelFrame :: proc(ctx: ^Context) {
 	assert(ctx.params.render_cancel != nil)
 	ctx.params.render_cancel(ctx.params.user_ptr)	
 }
 
 // Ends drawing flushing remaining render state.
-end_frame :: proc(ctx: ^Context) {
+EndFrame :: proc(ctx: ^Context) {
 	assert(ctx.params.render_flush != nil)
 	ctx.params.render_flush(ctx.params.user_ptr)	
 
@@ -377,16 +377,16 @@ end_frame :: proc(ctx: ^Context) {
 			return
 		}
 
-		iw, ih := image_size(ctx, font_image)
+		iw, ih := ImageSize(ctx, font_image)
 		j: int
 		for i in 0..<ctx.font_image_idx {
 			if ctx.font_images[i] != 0 {
 				image := ctx.font_images[i]
 				ctx.font_images[i] = 0
-				nw, nh := image_size(ctx, image)
+				nw, nh := ImageSize(ctx, image)
 
 				if nw < iw || nh < ih {
-					delete_image(ctx, image)
+					DeleteImage(ctx, image)
 				} else {
 					ctx.font_images[j] = image
 					j += 1
@@ -422,7 +422,7 @@ RGBA :: proc(r, g, b, a: u8) -> (res: Color) {
 }
 
 // Linearly interpolates from color c0 to c1, and returns resulting color value.
-lerp_rgba :: proc(c0, c1: Color, u: f32) -> (cint: Color) {
+LerpRGBA :: proc(c0, c1: Color, u: f32) -> (cint: Color) {
 	u := clamp(u, 0.0, 1.0)
 	oneminu := 1.0 - u
 	for i in 0..<4 {
@@ -486,7 +486,7 @@ HSLA :: proc(h, s, l: f32, a: u8) -> (col: Color) {
 ///////////////////////////////////////////////////////////
 
 // Sets the transform to identity matrix.
-transform_identity :: proc(t: ^Matrix) {
+TransformIdentity :: proc(t: ^Matrix) {
 	t[0] = 1
 	t[1] = 0
 	t[2] = 0
@@ -496,7 +496,7 @@ transform_identity :: proc(t: ^Matrix) {
 }
 
 // Sets the transform to translation matrix matrix.
-transform_translate :: proc(t: ^Matrix, tx, ty: f32) {
+TransformTranslate :: proc(t: ^Matrix, tx, ty: f32) {
 	t[0] = 1
 	t[1] = 0
 	t[2] = 0
@@ -506,7 +506,7 @@ transform_translate :: proc(t: ^Matrix, tx, ty: f32) {
 }
 
 // Sets the transform to scale matrix.
-transform_scale :: proc(t: ^Matrix, sx, sy: f32) {
+TransformScale :: proc(t: ^Matrix, sx, sy: f32) {
 	t[0] = sx
 	t[1] = 0
 	t[2] = 0
@@ -516,7 +516,7 @@ transform_scale :: proc(t: ^Matrix, sx, sy: f32) {
 }
 
 // Sets the transform to rotate matrix. Angle is specified in radians.
-transform_rotate :: proc(t: ^Matrix, a: f32) {
+TransformRotate :: proc(t: ^Matrix, a: f32) {
 	cs := math.cos(a)
 	sn := math.sin(a)
 	t[0] = cs
@@ -528,7 +528,7 @@ transform_rotate :: proc(t: ^Matrix, a: f32) {
 }
 
 // Sets the transform to skew-x matrix. Angle is specified in radians.
-transform_skew_x :: proc(t: ^Matrix, a: f32) {
+TransformSkewX :: proc(t: ^Matrix, a: f32) {
 	t[0] = 1
 	t[1] = 0
 	t[2] = math.tan(a)
@@ -538,7 +538,7 @@ transform_skew_x :: proc(t: ^Matrix, a: f32) {
 }
 
 // Sets the transform to skew-y matrix. Angle is specified in radians.
-transform_skew_y :: proc(t: ^Matrix, a: f32) {
+TransformSkewY :: proc(t: ^Matrix, a: f32) {
 	t[0] = 1
 	t[1] = math.tan(a)
 	t[2] = 0
@@ -548,7 +548,7 @@ transform_skew_y :: proc(t: ^Matrix, a: f32) {
 }
 
 // Sets the transform to the result of multiplication of two transforms, of A = A*B.
-transform_multiply :: proc(t: ^Matrix, s: Matrix) {
+TransformMultiply :: proc(t: ^Matrix, s: Matrix) {
 	t0 := t[0] * s[0] + t[1] * s[2]
 	t2 := t[2] * s[0] + t[3] * s[2]
 	t4 := t[4] * s[0] + t[5] * s[2] + s[4]
@@ -561,20 +561,20 @@ transform_multiply :: proc(t: ^Matrix, s: Matrix) {
 }
 
 // Sets the transform to the result of multiplication of two transforms, of A = B*A.
-transform_premultiply :: proc(t: ^Matrix, s: Matrix) {
+TransformPremultiply :: proc(t: ^Matrix, s: Matrix) {
 	temp := s
-	transform_multiply(&temp, t^)
+	TransformMultiply(&temp, t^)
 	t^ = temp
 }
 
 // Sets the destination to inverse of specified transform.
 // Returns true if the inverse could be calculated, else false.
-transform_inverse :: proc(inv: ^Matrix, t: Matrix) -> bool {
+TransformInverse :: proc(inv: ^Matrix, t: Matrix) -> bool {
 	// TODO could be bad math? due to types
 	det := f64(t[0]) * f64(t[3]) - f64(t[2]) * f64(t[1])
 	
 	if det > -1e-6 && det < 1e-6 {
-		transform_identity(inv)
+		TransformIdentity(inv)
 		return false
 	}
 	
@@ -589,7 +589,7 @@ transform_inverse :: proc(inv: ^Matrix, t: Matrix) -> bool {
 }
 
 // Transform a point by given transform.
-transform_point :: proc(
+TransformPoint :: proc(
 	dx: ^f32, 
 	dy: ^f32, 
 	t: Matrix, 
@@ -610,7 +610,7 @@ transform_point :: proc(
 
 // Pushes and saves the current render state into a state stack.
 // A matching nvgRestore() must be used to restore the state.
-save :: proc(ctx: ^Context) {
+Save :: proc(ctx: ^Context) {
 	if ctx.state_count >= MAX_STATES {
 		return
 	}
@@ -624,7 +624,7 @@ save :: proc(ctx: ^Context) {
 }
 
 // Pops and restores current render state.
-restore :: proc(ctx: ^Context) {
+Restore :: proc(ctx: ^Context) {
 	if ctx.state_count <= 1 {
 		return
 	}
@@ -633,14 +633,14 @@ restore :: proc(ctx: ^Context) {
 }
 
 // NOTE useful helper
-@(deferred_in=restore)
-save_scoped :: #force_inline proc(ctx: ^Context) {
-	save(ctx)
+@(deferred_in=Restore)
+SaveScoped :: #force_inline proc(ctx: ^Context) {
+	Save(ctx)
 }
 
-set_paint_color :: proc(p: ^Paint, color: Color) {
+__setPaintColor :: proc(p: ^Paint, color: Color) {
 	p^ = {}
-	transform_identity(&p.xform)
+	TransformIdentity(&p.xform)
 	p.radius = 0
 	p.feather = 1
 	p.inner_color = color
@@ -648,21 +648,21 @@ set_paint_color :: proc(p: ^Paint, color: Color) {
 }
 
 // Resets current render state to default values. Does not affect the render state stack.
-reset :: proc(ctx: ^Context) {
-	state := get_state(ctx)
+Reset :: proc(ctx: ^Context) {
+	state := __getState(ctx)
 	state^ = {}
 
-	set_paint_color(&state.fill, RGBA(255, 255, 255, 255))
-	set_paint_color(&state.stroke, RGBA(0, 0, 0, 255))
+	__setPaintColor(&state.fill, RGBA(255, 255, 255, 255))
+	__setPaintColor(&state.stroke, RGBA(0, 0, 0, 255))
 
-	state.composite_operation = composite_operation_state(.SOURCE_OVER)
+	state.composite_operation = __compositeOperationState(.SOURCE_OVER)
 	state.shape_anti_alias = true
 	state.stroke_width = 1
 	state.miter_limit = 10
 	state.line_cap = .Butt
 	state.line_join = .Miter
 	state.alpha = 1
-	transform_identity(&state.xform)
+	TransformIdentity(&state.xform)
 
 	state.scissor.extent[0] = -1
 	state.scissor.extent[1] = -1
@@ -682,69 +682,69 @@ reset :: proc(ctx: ^Context) {
 ///////////////////////////////////////////////////////////
 
 // Sets whether to draw antialias for nvgStroke() and nvgFill(). It's enabled by default.
-shape_anti_alias :: proc(ctx: ^Context, enabled: bool) {
-	state := get_state(ctx)
+ShapeAntiAlias :: proc(ctx: ^Context, enabled: bool) {
+	state := __getState(ctx)
 	state.shape_anti_alias = enabled
 }
 
 // Sets the stroke width of the stroke style.
-stroke_width :: proc(ctx: ^Context, width: f32) {
-	state := get_state(ctx)
+StrokeWidth :: proc(ctx: ^Context, width: f32) {
+	state := __getState(ctx)
 	state.stroke_width = width		
 }
 
 // Sets the miter limit of the stroke style.
 // Miter limit controls when a sharp corner is beveled.
-miter_limit :: proc(ctx: ^Context, limit: f32) {
-	state := get_state(ctx)
+MiterLimit :: proc(ctx: ^Context, limit: f32) {
+	state := __getState(ctx)
 	state.miter_limit = limit
 }
 
 // Sets how the end of the line (cap) is drawn,
 // Can be one of: NVG_BUTT (default), NVG_ROUND, NVG_SQUARE.
-line_cap :: proc(ctx: ^Context, cap: Line_Cap) {
-	state := get_state(ctx)
+LineCap :: proc(ctx: ^Context, cap: Line_Cap) {
+	state := __getState(ctx)
 	state.line_cap = cap
 }
 
 // Sets how sharp path corners are drawn.
 // Can be one of NVG_MITER (default), NVG_ROUND, NVG_BEVEL.
-line_join :: proc(ctx: ^Context, join: Line_Cap) {
-	state := get_state(ctx)
+LineJoin :: proc(ctx: ^Context, join: Line_Cap) {
+	state := __getState(ctx)
 	state.line_join = join
 }
 
 // Sets the transparency applied to all rendered shapes.
 // Already transparent paths will get proportionally more transparent as well.
-global_alpha :: proc(ctx: ^Context, alpha: f32) {
-	state := get_state(ctx)
+GlobalAlpha :: proc(ctx: ^Context, alpha: f32) {
+	state := __getState(ctx)
 	state.alpha = alpha
 }
 
 // Sets current stroke style to a solid color.
-stroke_color :: proc(ctx: ^Context, color: Color) {
-	state := get_state(ctx)
-	set_paint_color(&state.stroke, color)	
+StrokeColor :: proc(ctx: ^Context, color: Color) {
+	state := __getState(ctx)
+	__setPaintColor(&state.stroke, color)	
 }
 
 // Sets current stroke style to a paint, which can be a one of the gradients or a pattern.
-stroke_paint :: proc(ctx: ^Context, paint: Paint) {
-	state := get_state(ctx)
+StrokePaint :: proc(ctx: ^Context, paint: Paint) {
+	state := __getState(ctx)
 	state.stroke = paint
-	transform_multiply(&state.stroke.xform, state.xform)
+	TransformMultiply(&state.stroke.xform, state.xform)
 }
 
 // Sets current fill style to a solid color.
-fill_color :: proc(ctx: ^Context, color: Color) {
-	state := get_state(ctx)
-	set_paint_color(&state.fill, color)	
+FillColor :: proc(ctx: ^Context, color: Color) {
+	state := __getState(ctx)
+	__setPaintColor(&state.fill, color)	
 }
 
 // Sets current fill style to a paint, which can be a one of the gradients or a pattern.
-fill_paint :: proc(ctx: ^Context, paint: Paint) {
-	state := get_state(ctx)
+FillPaint :: proc(ctx: ^Context, paint: Paint) {
+	state := __getState(ctx)
 	state.fill = paint
-	transform_multiply(&state.fill.xform, state.xform)
+	TransformMultiply(&state.fill.xform, state.xform)
 }
 
 ///////////////////////////////////////////////////////////
@@ -765,55 +765,55 @@ fill_paint :: proc(ctx: ^Context, paint: Paint) {
 // Current coordinate system (transformation) can be saved and restored using nvgSave() and nvgRestore().
 ///////////////////////////////////////////////////////////
 
-transform :: proc(ctx: ^Context, a, b, c, d, e, f: f32) {
-	state := get_state(ctx)
-	transform_premultiply(&state.xform, { a, b, c, d, e, f })	
+Transform :: proc(ctx: ^Context, a, b, c, d, e, f: f32) {
+	state := __getState(ctx)
+	TransformPremultiply(&state.xform, { a, b, c, d, e, f })	
 }
 
 // Resets current transform to a identity matrix.
-reset_transform :: proc(ctx: ^Context) {
-	state := get_state(ctx)
-	transform_identity(&state.xform)
+ResetTransform :: proc(ctx: ^Context) {
+	state := __getState(ctx)
+	TransformIdentity(&state.xform)
 }
 
 // Translates current coordinate system.
-translate :: proc(ctx: ^Context, x, y: f32) {
-	state := get_state(ctx)
+Translate :: proc(ctx: ^Context, x, y: f32) {
+	state := __getState(ctx)
 	temp: Matrix
-	transform_translate(&state.xform, x, y)
-	transform_premultiply(&state.xform, temp)
+	TransformTranslate(&state.xform, x, y)
+	TransformPremultiply(&state.xform, temp)
 }
 
 // Rotates current coordinate system. Angle is specified in radians.
-rotate :: proc(ctx: ^Context, angle: f32) {
-	state := get_state(ctx)
+Rotate :: proc(ctx: ^Context, angle: f32) {
+	state := __getState(ctx)
 	temp: Matrix
-	transform_rotate(&state.xform, angle)
-	transform_premultiply(&state.xform, temp)
+	TransformRotate(&state.xform, angle)
+	TransformPremultiply(&state.xform, temp)
 }
 
 // Skews the current coordinate system along X axis. Angle is specified in radians.
-skew_x :: proc(ctx: ^Context, angle: f32) {
-	state := get_state(ctx)
+SkewX :: proc(ctx: ^Context, angle: f32) {
+	state := __getState(ctx)
 	temp: Matrix
-	transform_skew_x(&state.xform, angle)
-	transform_premultiply(&state.xform, temp)
+	TransformSkewX(&state.xform, angle)
+	TransformPremultiply(&state.xform, temp)
 }
 
 // Skews the current coordinate system along Y axis. Angle is specified in radians.
-skew_y :: proc(ctx: ^Context, angle: f32) {
-	state := get_state(ctx)
+SkewY :: proc(ctx: ^Context, angle: f32) {
+	state := __getState(ctx)
 	temp: Matrix
-	transform_skew_y(&state.xform, angle)
-	transform_premultiply(&state.xform, temp)
+	TransformSkewY(&state.xform, angle)
+	TransformPremultiply(&state.xform, temp)
 }
 
 // Scales the current coordinate system.
-scale :: proc(ctx: ^Context, x, y: f32) {
-	state := get_state(ctx)
+Scale :: proc(ctx: ^Context, x, y: f32) {
+	state := __getState(ctx)
 	temp: Matrix
-	transform_scale(&state.xform, x, y)
-	transform_premultiply(&state.xform, temp)
+	TransformScale(&state.xform, x, y)
+	TransformPremultiply(&state.xform, temp)
 }
 
 /*
@@ -823,8 +823,8 @@ scale :: proc(ctx: ^Context, x, y: f32) {
 	  [0 0 1]
 	There should be space for 6 floats in the return buffer for the values a-f.
 */
-current_transform :: proc(ctx: ^Context, xform: ^Matrix) {
-	state := get_state(ctx)
+CurrentTransform :: proc(ctx: ^Context, xform: ^Matrix) {
+	state := __getState(ctx)
 	if xform == nil {
 		return
 	}
@@ -841,7 +841,7 @@ current_transform :: proc(ctx: ^Context, xform: ^Matrix) {
 
 // Creates image by loading it from the disk from specified file name.
 // Returns handle to the image.
-create_image_path :: proc(ctx: ^Context, filename: cstring, image_flags: Image_Flags) -> int {
+CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: Image_Flags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -852,14 +852,14 @@ create_image_path :: proc(ctx: ^Context, filename: cstring, image_flags: Image_F
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := create_image_rgba(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRgba(ctx, int(w), int(h), image_flags, data)
 	stbi.image_free(img)
 	return image
 }
 
 // Creates image by loading it from the specified chunk of memory.
 // Returns handle to the image.
-create_image_mem :: proc(ctx: ^Context, data: []byte, image_flags: Image_Flags) -> int {
+CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: Image_Flags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -870,16 +870,16 @@ create_image_mem :: proc(ctx: ^Context, data: []byte, image_flags: Image_Flags) 
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := create_image_rgba(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRgba(ctx, int(w), int(h), image_flags, data)
 	stbi.image_free(img)
 	return image
 }
 
-create_image :: proc { create_image_path, create_image_mem }
+CreateImage :: proc { CreateImagePath, CreateImageMem }
 
 // Creates image from specified image data.
 // Returns handle to the image.
-create_image_rgba :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, data: []byte) -> int {
+CreateImageRgba :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, data: []byte) -> int {
 	assert(ctx.params.render_create_texture != nil)
 	return ctx.params.render_create_texture(
 		ctx.params.user_ptr,
@@ -891,7 +891,7 @@ create_image_rgba :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, da
 }
 
 // Updates image data specified by image handle.
-update_image :: proc(ctx: ^Context, image: int, data: []byte) {
+UpdateImage :: proc(ctx: ^Context, image: int, data: []byte) {
 	assert(ctx.params.render_get_texture_size != nil)
 	assert(ctx.params.render_update_texture != nil)
 	
@@ -903,14 +903,14 @@ update_image :: proc(ctx: ^Context, image: int, data: []byte) {
 }
 
 // Returns the dimensions of a created image.
-image_size :: proc(ctx: ^Context, image: int) -> (w, h: int) {
+ImageSize :: proc(ctx: ^Context, image: int) -> (w, h: int) {
 	assert(ctx.params.render_get_texture_size != nil)
 	ctx.params.render_get_texture_size(ctx.params.user_ptr, image, &w, &h)
 	return
 }
 
 // Deletes created image.
-delete_image :: proc(ctx: ^Context, image: int) {
+DeleteImage :: proc(ctx: ^Context, image: int) {
 	assert(ctx.params.render_delete_texture != nil)
 	ctx.params.render_delete_texture(ctx.params.user_ptr, image)
 }
@@ -927,7 +927,7 @@ delete_image :: proc(ctx: ^Context, image: int) {
 	of the linear gradient, icol specifies the start color and ocol the end color.
 	The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 */
-linear_gradient :: proc(
+LinearGradient :: proc(
 	sx, sy: f32,
 	ex, ey: f32,
 	icol: Color,
@@ -972,7 +972,7 @@ linear_gradient :: proc(
 	the border of the rectangle is. Parameter icol specifies the inner color and ocol the outer color of the gradient.
 	The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 */
-radial_gradient :: proc(
+RadialGradient :: proc(
 	cx, cy: f32,
 	inr: f32,
 	outr: f32,
@@ -982,7 +982,7 @@ radial_gradient :: proc(
 	r := (inr+outr)*0.5
 	f := (outr-inr)
 
-	transform_identity(&p.xform)
+	TransformIdentity(&p.xform)
 	p.xform[4] = cx
 	p.xform[5] = cy
 
@@ -1003,7 +1003,7 @@ radial_gradient :: proc(
 	the inner and outer radius of the gradient, icol specifies the start color and ocol the end color.
 	The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 */
-box_gradient :: proc(
+BoxGradient :: proc(
 	x, y: f32,
 	w, h: f32,
 	r: f32,
@@ -1011,7 +1011,7 @@ box_gradient :: proc(
 	icol: Color,
 	ocol: Color,
 ) -> (p: Paint) {
-	transform_identity(&p.xform)
+	TransformIdentity(&p.xform)
 	p.xform[4] = x+w*0.5
 	p.xform[5] = y+h*0.5
 
@@ -1032,14 +1032,14 @@ box_gradient :: proc(
 	(ex,ey) the size of one image, angle rotation around the top-left corner, image is handle to the image to render.
 	The gradient is transformed by the current transform when it is passed to nvgFillPaint() or nvgStrokePaint().
 */
-image_pattern :: proc(
+ImagePattern :: proc(
 	cx, cy: f32,
 	w, h: f32,
 	angle: f32,
 	image: int,
 	alpha: f32,
 ) -> (p: Paint) {
-	transform_rotate(&p.xform, angle)
+	TransformRotate(&p.xform, angle)
 	p.xform[4] = cx
 	p.xform[5] = cy
 
@@ -1050,7 +1050,7 @@ image_pattern :: proc(
 	p.inner_color = { 1,1,1,alpha }
 	p.outer_color = p.inner_color
 
-	return p
+	return
 }
 
 ///////////////////////////////////////////////////////////
@@ -1062,19 +1062,19 @@ image_pattern :: proc(
 
 // Sets the current scissor rectangle.
 // The scissor rectangle is transformed by the current transform.
-scissor :: proc(
+Scissor :: proc(
 	ctx: ^Context,
 	x, y: f32,
 	w, h: f32,
 ) {
-	state := get_state(ctx)
+	state := __getState(ctx)
 	w := max(w, 0)
 	h := max(h, 0)
 	
-	transform_identity(&state.scissor.xform)
+	TransformIdentity(&state.scissor.xform)
 	state.scissor.xform[4] = x + w * 0.5
 	state.scissor.xform[5] = y + h * 0.5
-	transform_multiply(&state.scissor.xform, state.xform)
+	TransformMultiply(&state.scissor.xform, state.xform)
 
 	state.scissor.extent[0] = w * 0.5
 	state.scissor.extent[1] = h * 0.5
@@ -1088,12 +1088,12 @@ scissor :: proc(
 	rectangle and the previous scissor rectangle transformed in the current
 	transform space. The resulting shape is always rectangle.
 */
-intersect_scissor :: proc(
+IntersectScissor :: proc(
 	ctx: ^Context,
 	x, y, w, h: f32,
 ) {
-	_isect_rects :: proc(
-		dst: ^Rect,
+	isect_rects :: proc(
+		dst: ^[4]f32,
 		ax, ay, aw, ah: f32,
 		bx, by, bw, bh: f32,
 	) {
@@ -1107,32 +1107,32 @@ intersect_scissor :: proc(
 		dst[3] = max(0.0, maxy - miny)
 	}
 
-	state := get_state(ctx)
+	state := __getState(ctx)
 	pxform: Matrix
 	invxorm: Matrix
 
 	// If no previous scissor has been set, set the scissor as current scissor.
 	if state.scissor.extent[0] < 0 {
-		scissor(ctx, x, y, w, h)
+		Scissor(ctx, x, y, w, h)
 		return
 	}
 
 	pxform = state.scissor.xform
 	ex := state.scissor.extent[0]
 	ey := state.scissor.extent[1]
-	transform_inverse(&invxorm, state.xform)
-	transform_multiply(&pxform, invxorm)
+	TransformInverse(&invxorm, state.xform)
+	TransformMultiply(&pxform, invxorm)
 	tex := ex * abs(pxform[0]) + ey * abs(pxform[2])
 	tey := ex * abs(pxform[1]) + ey * abs(pxform[3])
 	
-	rect: Rect
-	_isect_rects(&rect, pxform[4] - tex, pxform[5] - tey, tex * 2, tey * 2, x,y,w,h)
-	scissor(ctx, rect.x, rect.y, rect.z, rect.w)
+	rect: [4]f32
+	isect_rects(&rect, pxform[4] - tex, pxform[5] - tey, tex * 2, tey * 2, x,y,w,h)
+	Scissor(ctx, rect.x, rect.y, rect.z, rect.w)
 }
 
 // Reset and disables scissoring.
-reset_scissor :: proc(ctx: ^Context) {
-	state := get_state(ctx)
+ResetScissor :: proc(ctx: ^Context) {
+	state := __getState(ctx)
 	state.scissor.xform = 0
 	state.scissor.extent[0] = -1
 	state.scissor.extent[1] = -1
@@ -1163,7 +1163,7 @@ OP_STATE_TABLE :: [Composite_Operation][2]Blend_Factor {
 	.XOR = { .ONE_MINUS_DST_ALPHA, .ONE_MINUS_SRC_ALPHA },
 }
 
-composite_operation_state :: proc(op: Composite_Operation) -> (res: Composite_Operation_State) {
+__compositeOperationState :: proc(op: Composite_Operation) -> (res: Composite_Operation_State) {
 	table := OP_STATE_TABLE
 	factors := table[op]
 	res.src_RGB = factors.x
@@ -1174,18 +1174,18 @@ composite_operation_state :: proc(op: Composite_Operation) -> (res: Composite_Op
 }
 
 // Sets the composite operation. The op parameter should be one of NVGcompositeOperation.
-global_composite_operation :: proc(ctx: ^Context, op: Composite_Operation) {
-	state := get_state(ctx)
-	state.composite_operation = composite_operation_state(op)
+GlobalCompositeOperation :: proc(ctx: ^Context, op: Composite_Operation) {
+	state := __getState(ctx)
+	state.composite_operation = __compositeOperationState(op)
 }
 
 // Sets the composite operation with custom pixel arithmetic. The parameters should be one of NVGblendFactor.
-global_composite_blend_func :: proc(ctx: ^Context, sfactor, dfactor: Blend_Factor) {
-	global_composite_blend_func_separate(ctx, sfactor, dfactor, sfactor, dfactor)
+GlobalCompositeBlendFunc :: proc(ctx: ^Context, sfactor, dfactor: Blend_Factor) {
+	GlobalCompositeBlendFuncSeparate(ctx, sfactor, dfactor, sfactor, dfactor)
 }
 
 // Sets the composite operation with custom pixel arithmetic for RGB and alpha components separately. The parameters should be one of NVGblendFactor.
-global_composite_blend_func_separate :: proc(
+GlobalCompositeBlendFuncSeparate :: proc(
 	ctx: ^Context,
 	src_RGB: Blend_Factor,
 	dst_RGB: Blend_Factor,
@@ -1198,7 +1198,7 @@ global_composite_blend_func_separate :: proc(
 		src_alpha,
 		dst_alpha,
 	}
-	state := get_state(ctx)
+	state := __getState(ctx)
 	state.composite_operation = op
 }
 
@@ -1206,17 +1206,17 @@ global_composite_blend_func_separate :: proc(
 // Points / Path handling
 ///////////////////////////////////////////////////////////
 
-cross :: proc(dx0, dy0, dx1, dy1: f32) -> f32 {
+__cross :: proc(dx0, dy0, dx1, dy1: f32) -> f32 {
 	return dx1*dy0 - dx0*dy1
 }
 
-pt_equals :: proc(x1, y1, x2, y2, tol: f32) -> bool {
+__ptEquals :: proc(x1, y1, x2, y2, tol: f32) -> bool {
 	dx := x2 - x1
 	dy := y2 - y1
 	return dx * dx + dy * dy < tol * tol
 }
 
-dist_pt_seg :: proc(x, y, px, py, qx, qy: f32) -> f32 {
+__distPtSeg :: proc(x, y, px, py, qx, qy: f32) -> f32 {
 	pqx := qx - px
 	pqy := qy - py
 	dx := x - px
@@ -1239,8 +1239,8 @@ dist_pt_seg :: proc(x, y, px, py, qx, qy: f32) -> f32 {
 	return dx * dx + dy * dy
 }
 
-append_commands :: proc(ctx: ^Context, values: []f32) {
-	state := get_state(ctx)
+__appendCommands :: proc(ctx: ^Context, values: []f32) {
+	state := __getState(ctx)
 
 	if Command(values[0]) != .Close && Command(values[0]) != .Winding {
 		ctx.command_x = values[len(values) - 2]
@@ -1253,14 +1253,14 @@ append_commands :: proc(ctx: ^Context, values: []f32) {
 
 		switch cmd {
 			case .Move_To, .Line_To: {
-				transform_point(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
+				TransformPoint(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
 				i += 3
 			}
 
 			case .Bezier_To: {
-				transform_point(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
-				transform_point(&values[i + 3], &values[i + 4], state.xform, values[i + 3], values[i + 4])
-				transform_point(&values[i + 5], &values[i + 6], state.xform, values[i + 5], values[i + 6])
+				TransformPoint(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
+				TransformPoint(&values[i + 3], &values[i + 4], state.xform, values[i + 3], values[i + 4])
+				TransformPoint(&values[i + 5], &values[i + 6], state.xform, values[i + 5], values[i + 6])
 				i += 7
 			}
 
@@ -1283,30 +1283,27 @@ append_commands :: proc(ctx: ^Context, values: []f32) {
 	append(&ctx.commands, ..values)
 }
 
-path_cache_clear :: proc(ctx: ^Context) {
+__clearPathCache :: proc(ctx: ^Context) {
 	clear(&ctx.cache.points)
 	clear(&ctx.cache.paths)
 }
 
-last_path :: proc(ctx: ^Context) -> ^Path {
+__lastPath :: proc(ctx: ^Context) -> ^Path {
 	if len(ctx.cache.paths) > 0 {
 		return &ctx.cache.paths[len(ctx.cache.paths) - 1]
 	}
 
 	return nil
-	// idx := len(ctx.cache.paths) - 1
-	// runtime.bounds_check_error_loc(loc, idx, len(ctx.cache.paths))
-	// return &ctx.cache.paths[idx]
 }
 
-add_path :: proc(ctx: ^Context) {
+__addPath :: proc(ctx: ^Context) {
 	append(&ctx.cache.paths, Path {
 		first = len(ctx.cache.points),
 		winding = .Counter_Clockwise,
 	})
 }
 
-last_point :: proc(ctx: ^Context) -> ^Point {
+__lastPoint :: proc(ctx: ^Context) -> ^Point {
 	if len(ctx.cache.paths) > 0 {
 		return &ctx.cache.points[len(ctx.cache.points) - 1]
 	}
@@ -1314,17 +1311,17 @@ last_point :: proc(ctx: ^Context) -> ^Point {
 	return nil
 }
 
-add_point :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
-	path := last_path(ctx)
+__addPoint :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
+	path := __lastPath(ctx)
 
 	if path == nil {
 		return
 	}
 
 	if path.count > 0 && len(ctx.cache.points) > 0 {
-		pt := last_point(ctx)
+		pt := __lastPoint(ctx)
 
-		if pt_equals(pt.x, pt.y, x, y, ctx.dist_tol) {
+		if __ptEquals(pt.x, pt.y, x, y, ctx.dist_tol) {
 			pt.flags |= flags
 			return
 		}
@@ -1338,30 +1335,30 @@ add_point :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
 	path.count += 1
 }
 
-path_set_close :: proc(ctx: ^Context) {
-	path := last_path(ctx)
+__closePath :: proc(ctx: ^Context) {
+	path := __lastPath(ctx)
 	if path == nil {
 		return
 	}
 	path.closed = true
 }
 
-path_set_winding :: proc(ctx: ^Context, winding: Winding) {
-	path := last_path(ctx)
+__pathWinding :: proc(ctx: ^Context, winding: Winding) {
+	path := __lastPath(ctx)
 	if path == nil {
 		return
 	}
 	path.winding = winding
 }
 
-_get_average_scale :: proc(t: []f32) -> f32 {
+__getAverageScale :: proc(t: []f32) -> f32 {
 	assert(len(t) > 4)
 	sx := math.sqrt(t[0] * t[0] + t[2] * t[2])
 	sy := math.sqrt(t[1] * t[1] + t[3] * t[3])
 	return (sx + sy) * 0.5
 }
 
-triarea2 :: proc(ax, ay, bx, by, cx, cy: f32) -> f32 {
+__triarea2 :: proc(ax, ay, bx, by, cx, cy: f32) -> f32 {
 	abx := bx - ax
 	aby := by - ay
 	acx := cx - ax
@@ -1369,20 +1366,20 @@ triarea2 :: proc(ax, ay, bx, by, cx, cy: f32) -> f32 {
 	return acx * aby - abx * acy
 }
 
-poly_area :: proc(points: []Point) -> f32 {
+__polyArea :: proc(points: []Point) -> f32 {
 	area := f32(0)
 	
 	for i := 2; i < len(points); i += 1 {
 		a := &points[0]
 		b := &points[i - 1]
 		c := &points[i]
-		area += triarea2(a.x, a.y, b.x, b.y, c.x, c.y)
+		area += __triarea2(a.x, a.y, b.x, b.y, c.x, c.y)
 	}
 	
 	return area * 0.5
 }
 
-poly_reverse :: proc(points: []Point) {
+__polyReverse :: proc(points: []Point) {
 	tmp: Point
 	i := 0 
 	j := len(points) - 1
@@ -1396,11 +1393,7 @@ poly_reverse :: proc(points: []Point) {
 	}
 }
 
-// vset :: proc(vtx: ^Vertex, x, y, u, v: f32) {
-// 	vtx^ = { x, y, u, v }
-// }
-
-normalize :: proc(x, y: ^f32) -> f32 {
+__normalize :: proc(x, y: ^f32) -> f32 {
 	d := math.sqrt(x^ * x^ + y^ * y^)
 	if d > 1e-6 {
 		id := 1.0 / d
@@ -1410,7 +1403,7 @@ normalize :: proc(x, y: ^f32) -> f32 {
 	return d
 }
 
-tesselate_bezier :: proc(
+__tesselateBezier :: proc(
 	ctx: ^Context,
 	x1, y1: f32,
 	x2, y2: f32,
@@ -1438,7 +1431,7 @@ tesselate_bezier :: proc(
 	d3 := abs(((x3 - x4) * dy - (y3 - y4) * dx))
 
 	if (d2 + d3)*(d2 + d3) < ctx.tess_tol * (dx*dx + dy*dy) {
-		add_point(ctx, x4, y4, flags)
+		__addPoint(ctx, x4, y4, flags)
 		return
 	}
 
@@ -1447,11 +1440,11 @@ tesselate_bezier :: proc(
 	x1234 := (x123 + x234) * 0.5
 	y1234 := (y123 + y234) * 0.5
 
-	tesselate_bezier(ctx, x1,y1, x12,y12, x123,y123, x1234,y1234, level+1, {})
-	tesselate_bezier(ctx, x1234,y1234, x234,y234, x34,y34, x4,y4, level+1, flags)
+	__tesselateBezier(ctx, x1,y1, x12,y12, x123,y123, x1234,y1234, level+1, {})
+	__tesselateBezier(ctx, x1234,y1234, x234,y234, x34,y34, x4,y4, level+1, flags)
 }
 
-flatten_paths :: proc(ctx: ^Context) {
+__flattenPaths :: proc(ctx: ^Context) {
 	cache := &ctx.cache
 
 	if len(cache.paths) > 0 {
@@ -1465,39 +1458,39 @@ flatten_paths :: proc(ctx: ^Context) {
 		
 		switch cmd {
 			case .Move_To: {
-				add_path(ctx)
+				__addPath(ctx)
 				p := ctx.commands[i + 1:]
-				add_point(ctx, p[0], p[1], { .Corner })
+				__addPoint(ctx, p[0], p[1], { .Corner })
 				i += 3
 			}
 
 			case .Line_To: {
 				p := ctx.commands[i + 1:]
-				add_point(ctx, p[0], p[1], { .Corner })
+				__addPoint(ctx, p[0], p[1], { .Corner })
 				i += 3
 			}
 
 			case .Bezier_To: {
-				last := last_point(ctx)
+				last := __lastPoint(ctx)
 			
 				if last != nil {
 					cp1 := ctx.commands[i + 1:]
 					cp2 := ctx.commands[i + 3:]
 					p := ctx.commands[i + 5:]
-					tesselate_bezier(ctx, last.x,last.y, cp1[0],cp1[1], cp2[0],cp2[1], p[0],p[1], 0, { .Corner })
+					__tesselateBezier(ctx, last.x,last.y, cp1[0],cp1[1], cp2[0],cp2[1], p[0],p[1], 0, { .Corner })
 				}
 
 				i += 7
 			}
 
 			case .Close: {
-				path_set_close(ctx)
+				__closePath(ctx)
 				i += 1
 			}
 
 			case .Winding: {
 				// TODO check this again?
-				path_set_winding(ctx, Winding(ctx.commands[i + 1]))
+				__pathWinding(ctx, Winding(ctx.commands[i + 1]))
 				i += 2
 			}
 
@@ -1520,22 +1513,24 @@ flatten_paths :: proc(ctx: ^Context) {
 		// If the first and last points are the same, remove the last, mark as closed path.
 		p0 := &pts[path.count-1]
 		p1 := &pts[0]
-		if pt_equals(p0.x,p0.y, p1.x,p1.y, ctx.dist_tol) {
+		if __ptEquals(p0.x,p0.y, p1.x,p1.y, ctx.dist_tol) {
+			fmt.eprintln("~~~", path.count)
 			path.count -= 1
 			p0 = &pts[path.count - 1]
+			// p0 = mem.ptr_offset(&pts[0], path.count - 1)
 			path.closed = true
 		}
 
 		// enforce winding
 		if path.count > 2 {
-			area := poly_area(pts[:path.count])
+			area := __polyArea(pts[:path.count])
 			
 			if path.winding == .Counter_Clockwise && area < 0 {
-				poly_reverse(pts[:path.count])
+				__polyReverse(pts[:path.count])
 			}
 			
 			if path.winding == .Clockwise && area > 0 {
-				poly_reverse(pts[:path.count])
+				__polyReverse(pts[:path.count])
 			}
 		}
 
@@ -1543,7 +1538,7 @@ flatten_paths :: proc(ctx: ^Context) {
 			// Calculate segment direction and length
 			p0.dx = p1.x - p0.x
 			p0.dy = p1.y - p0.y
-			p0.len = normalize(&p0.dx, &p0.dy)
+			p0.len = __normalize(&p0.dx, &p0.dy)
 			
 			// Update bounds
 			cache.bounds[0] = min(cache.bounds[0], p0.x)
@@ -1558,12 +1553,12 @@ flatten_paths :: proc(ctx: ^Context) {
 	}
 }
 
-curve_divs :: proc(r, arc, tol: f32) -> f32 {
+__curveDivs :: proc(r, arc, tol: f32) -> f32 {
 	da := math.acos(r / (r + tol)) * 2
 	return max(2, math.ceil(arc / da))
 }
 
-choose_bevel :: proc(
+__chooseBevel :: proc(
 	bevel: bool,
 	p0: ^Point,
 	p1: ^Point,
@@ -1588,12 +1583,12 @@ choose_bevel :: proc(
 ///////////////////////////////////////////////////////////
 
 // set vertex & increase slice position (decreases length)
-vset :: proc(dst: ^[]Vertex, x, y, u, v: f32, loc := #caller_location) {
+__vset :: proc(dst: ^[]Vertex, x, y, u, v: f32, loc := #caller_location) {
 	dst[0] = { x, y, u, v }
 	dst^ = dst[1:]
 }
 
-round_join :: proc(
+__roundJoin :: proc(
 	dst: ^[]Vertex,
 	p0: ^Point,
 	p1: ^Point,
@@ -1610,7 +1605,7 @@ round_join :: proc(
 
 	if .Left in p1.flags {
 		lx0,ly0,lx1,ly1: f32
-		choose_bevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
+		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
 		a0 := math.atan2(-dly0, -dlx0)
 		a1 := math.atan2(-dly1, -dlx1)
 		
@@ -1618,8 +1613,8 @@ round_join :: proc(
 			a1 -= math.PI * 2
 		} 
 
-		vset(dst, lx0, ly0, lu, 1)
-		vset(dst, p1.x - dlx0 * rw, p1.y - dly0 * rw, ru, 1)
+		__vset(dst, lx0, ly0, lu, 1)
+		__vset(dst, p1.x - dlx0 * rw, p1.y - dly0 * rw, ru, 1)
 
 		temp := int(math.ceil((a0 - a1) / math.PI * f32(ncap)))
 		n := clamp(temp, 2, ncap)
@@ -1629,23 +1624,23 @@ round_join :: proc(
 			a := a0 + u * (a1 - a0)
 			rx := p1.x + math.cos(a) * rw
 			ry := p1.y + math.sin(a) * rw
-			vset(dst, p1.x, p1.y, 0.5, 1)
-			vset(dst, rx, ry, ru,1)
+			__vset(dst, p1.x, p1.y, 0.5, 1)
+			__vset(dst, rx, ry, ru,1)
 		}
 
-		vset(dst, lx1, ly1, lu,1)
-		vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
+		__vset(dst, lx1, ly1, lu,1)
+		__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 	} else {
 		rx0,ry0,rx1,ry1: f32
-		choose_bevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0, &ry0, &rx1, &ry1)
+		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0, &ry0, &rx1, &ry1)
 		a0 := math.atan2(dly0, dlx0)
 		a1 := math.atan2(dly1, dlx1)
 		if a1 < a0 {
 			a1 += math.PI * 2
 		}
 
-		vset(dst, p1.x + dlx0*rw, p1.y + dly0*rw, lu,1)
-		vset(dst, rx0, ry0, ru,1)
+		__vset(dst, p1.x + dlx0*rw, p1.y + dly0*rw, lu,1)
+		__vset(dst, rx0, ry0, ru,1)
 
 		temp := int(math.ceil((a1 - a0) / math.PI * f32(ncap)))
 		n := clamp(temp, 2, ncap)
@@ -1655,16 +1650,16 @@ round_join :: proc(
 			a := a0 + u*(a1-a0)
 			lx := p1.x + math.cos(a) * lw
 			ly := p1.y + math.sin(a) * lw
-			vset(dst, lx, ly, lu, 1)
-			vset(dst, p1.x, p1.y, 0.5, 1)
+			__vset(dst, lx, ly, lu, 1)
+			__vset(dst, p1.x, p1.y, 0.5, 1)
 		}
 
-		vset(dst, p1.x + dlx1*rw, p1.y + dly1*rw, lu,1)
-		vset(dst, rx1, ry1, ru,1)
+		__vset(dst, p1.x + dlx1*rw, p1.y + dly1*rw, lu,1)
+		__vset(dst, rx1, ry1, ru,1)
 	}
 }
 
-bevel_join :: proc(
+__bevelJoin :: proc(
 	dst: ^[]Vertex,
 	p0: ^Point,
 	p1: ^Point,
@@ -1682,65 +1677,65 @@ bevel_join :: proc(
 	lx0, ly0, lx1, ly1: f32
 
 	if .Left in p1.flags {
-		choose_bevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
+		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
 
-		vset(dst, lx0, ly0, lu,1)
-		vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
+		__vset(dst, lx0, ly0, lu,1)
+		__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
 
 		if .Bevel in p1.flags {
-			vset(dst, lx0, ly0, lu,1)
-			vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
+			__vset(dst, lx0, ly0, lu,1)
+			__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
 
-			vset(dst, lx1, ly1, lu,1)
-			vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
+			__vset(dst, lx1, ly1, lu,1)
+			__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 		} else {
 			rx0 = p1.x - p1.dmx * rw;
 			ry0 = p1.y - p1.dmy * rw;
 
-			vset(dst, p1.x, p1.y, 0.5,1)
-			vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
+			__vset(dst, p1.x, p1.y, 0.5,1)
+			__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
 
-			vset(dst, rx0, ry0, ru,1)
-			vset(dst, rx0, ry0, ru,1)
+			__vset(dst, rx0, ry0, ru,1)
+			__vset(dst, rx0, ry0, ru,1)
 
-			vset(dst, p1.x, p1.y, 0.5,1)
-			vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
+			__vset(dst, p1.x, p1.y, 0.5,1)
+			__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 		}
 
-		vset(dst, lx1, ly1, lu,1)
-		vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
+		__vset(dst, lx1, ly1, lu,1)
+		__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 	} else {
-		choose_bevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0,&ry0, &rx1,&ry1)
+		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0,&ry0, &rx1,&ry1)
 
-		vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
-		vset(dst, rx0, ry0, ru,1)
+		__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
+		__vset(dst, rx0, ry0, ru,1)
 
 		if .Bevel in p1.flags {
-			vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
-			vset(dst, rx0, ry0, ru,1)
+			__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
+			__vset(dst, rx0, ry0, ru,1)
 
-			vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
-			vset(dst, rx1, ry1, ru,1)
+			__vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
+			__vset(dst, rx1, ry1, ru,1)
 		} else {
 			lx0 = p1.x + p1.dmx * lw;
 			ly0 = p1.y + p1.dmy * lw;
 
-			vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
-			vset(dst, p1.x, p1.y, 0.5,1)
+			__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
+			__vset(dst, p1.x, p1.y, 0.5,1)
 
-			vset(dst, lx0, ly0, lu,1)
-			vset(dst, lx0, ly0, lu,1)
+			__vset(dst, lx0, ly0, lu,1)
+			__vset(dst, lx0, ly0, lu,1)
 
-			vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
-			vset(dst, p1.x, p1.y, 0.5,1)
+			__vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
+			__vset(dst, p1.x, p1.y, 0.5,1)
 		}
 
-		vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
-		vset(dst, rx1, ry1, ru,1)
+		__vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
+		__vset(dst, rx1, ry1, ru,1)
 	}
 }
 
-butt_cap_start :: proc(
+__buttCapStart :: proc(
 	dst: ^[]Vertex,
 	p: ^Point,
 	dx, dy: f32,
@@ -1754,13 +1749,13 @@ butt_cap_start :: proc(
 	py := p.y - dy * d
 	dlx := dy
 	dly := -dx
-	vset(dst, px + dlx*w - dx*aa, py + dly*w - dy*aa, u0,0)
-	vset(dst, px - dlx*w - dx*aa, py - dly*w - dy*aa, u1,0)
-	vset(dst, px + dlx*w, py + dly*w, u0,1)
-	vset(dst, px - dlx*w, py - dly*w, u1,1)
+	__vset(dst, px + dlx*w - dx*aa, py + dly*w - dy*aa, u0,0)
+	__vset(dst, px - dlx*w - dx*aa, py - dly*w - dy*aa, u1,0)
+	__vset(dst, px + dlx*w, py + dly*w, u0,1)
+	__vset(dst, px - dlx*w, py - dly*w, u1,1)
 }
 
-butt_cap_end :: proc(
+__buttCapEnd :: proc(
 	dst: ^[]Vertex,
 	p: ^Point,
 	dx, dy: f32,
@@ -1774,13 +1769,13 @@ butt_cap_end :: proc(
 	py := p.y + dy * d
 	dlx := dy
 	dly := -dx
-	vset(dst, px + dlx*w, py + dly*w, u0,1)
-	vset(dst, px - dlx*w, py - dly*w, u1,1)
-	vset(dst, px + dlx*w + dx*aa, py + dly*w + dy*aa, u0,0)
-	vset(dst, px - dlx*w + dx*aa, py - dly*w + dy*aa, u1,0)
+	__vset(dst, px + dlx*w, py + dly*w, u0,1)
+	__vset(dst, px - dlx*w, py - dly*w, u1,1)
+	__vset(dst, px + dlx*w + dx*aa, py + dly*w + dy*aa, u0,0)
+	__vset(dst, px - dlx*w + dx*aa, py - dly*w + dy*aa, u1,0)
 }
 
-round_cap_start :: proc(
+__roundCapStart :: proc(
 	dst: ^[]Vertex,
 	p: ^Point,
 	dx, dy: f32,
@@ -1798,15 +1793,15 @@ round_cap_start :: proc(
 		a := f32(i) / f32(ncap-1) * math.PI
 		ax := math.cos(a) * w
 		ay := math.sin(a) * w
-		vset(dst, px - dlx*ax - dx*ay, py - dly*ax - dy*ay, u0,1)
-		vset(dst, px, py, 0.5,1)
+		__vset(dst, px - dlx*ax - dx*ay, py - dly*ax - dy*ay, u0,1)
+		__vset(dst, px, py, 0.5,1)
 	}
 
-	vset(dst, px + dlx*w, py + dly*w, u0,1)
-	vset(dst, px - dlx*w, py - dly*w, u1,1)
+	__vset(dst, px + dlx*w, py + dly*w, u0,1)
+	__vset(dst, px - dlx*w, py - dly*w, u1,1)
 }
 
-round_cap_end :: proc(
+__roundCapEnd :: proc(
 	dst: ^[]Vertex,
 	p: ^Point,
 	dx, dy: f32,
@@ -1820,18 +1815,18 @@ round_cap_end :: proc(
 	dlx := dy
 	dly := -dx
 
-	vset(dst, px + dlx*w, py + dly*w, u0,1)
-	vset(dst, px - dlx*w, py - dly*w, u1,1)
+	__vset(dst, px + dlx*w, py + dly*w, u0,1)
+	__vset(dst, px - dlx*w, py - dly*w, u1,1)
 	for i in 0..<ncap {
 		a := f32(i) / f32(ncap - 1) * math.PI
 		ax := math.cos(a) * w
 		ay := math.sin(a) * w
-		vset(dst, px, py, 0.5,1)
-		vset(dst, px - dlx*ax + dx*ay, py - dly*ax + dy*ay, u0,1)
+		__vset(dst, px, py, 0.5,1)
+		__vset(dst, px - dlx*ax + dx*ay, py - dly*ax + dy*ay, u0,1)
 	}
 }
 
-calculate_joins :: proc(
+__calculateJoins :: proc(
 	ctx: ^Context,
 	w: f32,
 	line_join: Line_Cap,
@@ -1853,7 +1848,7 @@ calculate_joins :: proc(
 		path.nbevel = 0
 
 		for j in 0..<path.count {
-			dlx0, dly0, dlx1, dly1, dmr2, cross, limit: f32
+			dlx0, dly0, dlx1, dly1, dmr2, __cross, limit: f32
 			dlx0 = p0.dy
 			dly0 = -p0.dx
 			dlx1 = p1.dy
@@ -1875,8 +1870,8 @@ calculate_joins :: proc(
 			p1.flags = (.Corner in p1.flags) ? { .Corner } : {}
 
 			// Keep track of left turns.
-			cross = p1.dx * p0.dy - p0.dx * p1.dy;
-			if cross > 0.0 {
+			__cross = p1.dx * p0.dy - p0.dx * p1.dy;
+			if __cross > 0.0 {
 				nleft += 1;
 				incl(&p1.flags, Point_Flag.Left)
 			}
@@ -1907,7 +1902,7 @@ calculate_joins :: proc(
 }
 
 // TODO could be done better? or not need dynamic
-_alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
+__allocTempVerts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
 	// old := len(ctx.cache.verts)
 	// resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
 	// return ctx.cache.verts[old:old+nverts]
@@ -1915,7 +1910,7 @@ _alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
 	return ctx.cache.verts[:]
 }
 
-expand_stroke :: proc(
+__expandStroke :: proc(
 	ctx: ^Context,
 	w: f32,
 	fringe: f32,
@@ -1927,7 +1922,7 @@ expand_stroke :: proc(
 	aa := fringe
 	u0 := f32(0.0)
 	u1 := f32(1.0)
-	ncap := curve_divs(w, math.PI, ctx.tess_tol)	// Calculate divisions per half circle.
+	ncap := __curveDivs(w, math.PI, ctx.tess_tol)	// Calculate divisions per half circle.
 
 	w := w
 	w += aa * 0.5
@@ -1938,7 +1933,7 @@ expand_stroke :: proc(
 		u1 = 0.5
 	}
 
-	calculate_joins(ctx, w, line_join, miter_limit)
+	__calculateJoins(ctx, w, line_join, miter_limit)
 
 	// Calculate max vertex usage.
 	cverts := 0
@@ -1962,7 +1957,7 @@ expand_stroke :: proc(
 		}
 	}
 
-	verts := _alloc_temp_verts(ctx, cverts)
+	verts := __allocTempVerts(ctx, cverts)
 	dst_index: int
 
 	for i in 0..<len(cache.paths) {
@@ -1998,14 +1993,14 @@ expand_stroke :: proc(
 			// Add cap
 			dx = p1.x - p0.x;
 			dy = p1.y - p0.y;
-			normalize(&dx, &dy);
+			__normalize(&dx, &dy);
 
 			if line_cap == .Butt {
-				butt_cap_start(&dst, p0, dx, dy, w, -aa*0.5, aa, u0, u1)
+				__buttCapStart(&dst, p0, dx, dy, w, -aa*0.5, aa, u0, u1)
 			}	else if line_cap == .Butt || line_cap == .Square {
-				butt_cap_start(&dst, p0, dx, dy, w, w-aa, aa, u0, u1)
+				__buttCapStart(&dst, p0, dx, dy, w, w-aa, aa, u0, u1)
 			}	else if line_cap == .Round {
-				round_cap_start(&dst, p0, dx, dy, w, int(ncap), u0, u1)
+				__roundCapStart(&dst, p0, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
 
@@ -2014,13 +2009,13 @@ expand_stroke :: proc(
 			// if ((p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0) {
 			if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
 				if line_join == .Round {
-					round_join(&dst, p0, p1, w, w, u0, u1, int(ncap))
+					__roundJoin(&dst, p0, p1, w, w, u0, u1, int(ncap))
 				} else {
-					bevel_join(&dst, p0, p1, w, w, u0, u1)
+					__bevelJoin(&dst, p0, p1, w, w, u0, u1)
 				}
 			} else {
-				vset(&dst, p1.x + (p1.dmx * w), p1.y + (p1.dmy * w), u0, 1)
-				vset(&dst, p1.x - (p1.dmx * w), p1.y - (p1.dmy * w), u1, 1)
+				__vset(&dst, p1.x + (p1.dmx * w), p1.y + (p1.dmy * w), u0, 1)
+				__vset(&dst, p1.x - (p1.dmx * w), p1.y - (p1.dmy * w), u1, 1)
 			}
 
 			p0 = p1 
@@ -2030,20 +2025,20 @@ expand_stroke :: proc(
 		if loop {
 			// NOTE use old vertices to loopback!
 			// Loop it
-			vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, u0, 1)
-			vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, u1, 1)
+			__vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, u0, 1)
+			__vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, u1, 1)
 		} else {
 			// Add cap
 			dx = p1.x - p0.x;
 			dy = p1.y - p0.y;
-			normalize(&dx, &dy);
+			__normalize(&dx, &dy);
 
 			if line_cap == .Butt {
-				butt_cap_end(&dst, p1, dx, dy, w, -aa*0.5, aa, u0, u1)
+				__buttCapEnd(&dst, p1, dx, dy, w, -aa*0.5, aa, u0, u1)
 			}	else if line_cap == .Butt || line_cap == .Square {
-				butt_cap_end(&dst, p1, dx, dy, w, w-aa, aa, u0, u1)
+				__buttCapEnd(&dst, p1, dx, dy, w, w-aa, aa, u0, u1)
 			}	else if line_cap == .Round {
-				round_cap_end(&dst, p1, dx, dy, w, int(ncap), u0, u1)
+				__roundCapEnd(&dst, p1, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
 
@@ -2058,7 +2053,7 @@ expand_stroke :: proc(
 	return true
 }
 
-expand_fill :: proc(
+__expandFill :: proc(
 	ctx: ^Context,
 	w: f32,
 	line_join: Line_Cap,
@@ -2067,7 +2062,7 @@ expand_fill :: proc(
 	cache := &ctx.cache
 	aa := ctx.fringe_width
 	fringe := w > 0.0
-	calculate_joins(ctx, w, line_join, miter_limit)
+	__calculateJoins(ctx, w, line_join, miter_limit)
 
 	// Calculate max vertex usage.
 	cverts := 0
@@ -2080,7 +2075,7 @@ expand_fill :: proc(
 	}
 
 	convex := len(cache.paths) == 1 && cache.paths[0].convex
-	verts := _alloc_temp_verts(ctx, cverts)
+	verts := __allocTempVerts(ctx, cverts)
 	dst_index: int
 
 	for path in &cache.paths {
@@ -2109,17 +2104,17 @@ expand_fill :: proc(
 					if .Left in p1.flags {
 						lx := p1.x + p1.dmx * woff
 						ly := p1.y + p1.dmy * woff
-						vset(&dst, lx, ly, 0.5,1)
+						__vset(&dst, lx, ly, 0.5,1)
 					} else {
 						lx0 := p1.x + dlx0 * woff
 						ly0 := p1.y + dly0 * woff
 						lx1 := p1.x + dlx1 * woff
 						ly1 := p1.y + dly1 * woff
-						vset(&dst, lx0, ly0, 0.5,1)
-						vset(&dst, lx1, ly1, 0.5,1)
+						__vset(&dst, lx0, ly0, 0.5,1)
+						__vset(&dst, lx1, ly1, 0.5,1)
 					}
 				} else {
-					vset(&dst, p1.x + (p1.dmx * woff), p1.y + (p1.dmy * woff), 0.5,1)
+					__vset(&dst, p1.x + (p1.dmx * woff), p1.y + (p1.dmy * woff), 0.5,1)
 				}
 
 				p0 = p1
@@ -2127,7 +2122,7 @@ expand_fill :: proc(
 			}
 		} else {
 			for j in 0..<path.count {
-				vset(&dst, pts[j].x, pts[j].y, 0.5,1)
+				__vset(&dst, pts[j].x, pts[j].y, 0.5,1)
 			}
 		}
 
@@ -2158,10 +2153,10 @@ expand_fill :: proc(
 
 			for j in 0..<path.count {
 				if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
-					bevel_join(&dst, p0, p1, lw, rw, lu, ru)
+					__bevelJoin(&dst, p0, p1, lw, rw, lu, ru)
 				} else {
-					vset(&dst, p1.x + (p1.dmx * lw), p1.y + (p1.dmy * lw), lu,1)
-					vset(&dst, p1.x - (p1.dmx * rw), p1.y - (p1.dmy * rw), ru,1)
+					__vset(&dst, p1.x + (p1.dmx * lw), p1.y + (p1.dmy * lw), lu,1)
+					__vset(&dst, p1.x - (p1.dmx * rw), p1.y - (p1.dmy * rw), ru,1)
 				}
 
 				p0 = p1
@@ -2169,8 +2164,8 @@ expand_fill :: proc(
 			}
 
 			// Loop it
-			vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, lu,1)
-			vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, ru,1)
+			__vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, lu,1)
+			__vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, ru,1)
 
 			dst_diff := dst_start_length - len(dst) 
 			path.stroke = verts[dst_index:dst_index + dst_diff]
@@ -2204,60 +2199,60 @@ expand_fill :: proc(
 ///////////////////////////////////////////////////////////
 
 // NOTE: helper to go from Command to f32
-cmdf :: #force_inline proc(cmd: Command) -> f32 {
+__cmdf :: #force_inline proc(cmd: Command) -> f32 {
 	return f32(cmd)
 }
 
 // Clears the current path and sub-paths.
-begin_path :: proc(ctx: ^Context) {
+BeginPath :: proc(ctx: ^Context) {
 	clear(&ctx.commands)
-	path_cache_clear(ctx)
+	__clearPathCache(ctx)
 }
 
-@(deferred_in=fill)
-begin_fill :: proc(ctx: ^Context) {
-	begin_path(ctx)
+@(deferred_in=Fill)
+BeginFill :: proc(ctx: ^Context) {
+	BeginPath(ctx)
 }
 
-@(deferred_in=stroke)
-begin_stroke :: proc(ctx: ^Context) {
-	begin_path(ctx)
+@(deferred_in=Stroke)
+BeginStroke :: proc(ctx: ^Context) {
+	BeginPath(ctx)
 }
 
-@(deferred_in=stroke)
-begin_fill_stroke :: proc(ctx: ^Context) {
-		
+@(deferred_in=Stroke)
+BeginFillStroke :: proc(ctx: ^Context) {
+	BeginPath(ctx)		
 }
 
 // Starts new sub-path with specified point as first point.
-move_to :: proc(ctx: ^Context, x, y: f32) {
-	values := [?]f32 { cmdf(.Move_To), x, y }
-	append_commands(ctx, values[:])
+MoveTo :: proc(ctx: ^Context, x, y: f32) {
+	values := [3]f32 { __cmdf(.Move_To), x, y }
+	__appendCommands(ctx, values[:])
 }
 
 // Adds line segment from the last point in the path to the specified point.
-line_to :: proc(ctx: ^Context, x, y: f32) {
-	values := [?]f32 { cmdf(.Line_To), x, y }
-	append_commands(ctx, values[:])
+LineTo :: proc(ctx: ^Context, x, y: f32) {
+	values := [3]f32 { __cmdf(.Line_To), x, y }
+	__appendCommands(ctx, values[:])
 }
 
 // Adds cubic bezier segment from last point in the path via two control points to the specified point.
-bezier_to :: proc(
+BezierTo :: proc(
 	ctx: ^Context, 
 	c1x, c1y: f32,
 	c2x, c2y: f32,
 	x, y: f32,
 ) {
-	values := [?]f32 { cmdf(.Bezier_To), c1x, c1y, c2x, c2y, x, y }
-	append_commands(ctx, values[:])
+	values := [?]f32 { __cmdf(.Bezier_To), c1x, c1y, c2x, c2y, x, y }
+	__appendCommands(ctx, values[:])
 }
 
 // Adds quadratic bezier segment from last point in the path via a control point to the specified point.
-quad_to :: proc(ctx: ^Context, cx, cy, x, y: f32) {
+QuadTo :: proc(ctx: ^Context, cx, cy, x, y: f32) {
 	x0 := ctx.command_x
 	y0 := ctx.command_y
 	values := [?]f32 {
-		cmdf(.Bezier_To),
+		__cmdf(.Bezier_To),
 		x0 + 2 / 3 * (cx - x0), 
 		y0 + 2 / 3 * (cy - y0),
 		x + 2 / 3 * (cx - x), 
@@ -2265,11 +2260,11 @@ quad_to :: proc(ctx: ^Context, cx, cy, x, y: f32) {
 		x,
 		y,
 	}
-	append_commands(ctx, values[:])
+	__appendCommands(ctx, values[:])
 }
 
 // Adds an arc segment at the corner defined by the last path point, and two specified points.
-arc_to :: proc(
+ArcTo :: proc(
 	ctx: ^Context,
 	x1, y1: f32,
 	x2, y2: f32,
@@ -2282,11 +2277,11 @@ arc_to :: proc(
 	x0 := ctx.command_x
 	y0 := ctx.command_y
 	// Handle degenerate cases.
-	if pt_equals(x0,y0, x1,y1, ctx.dist_tol) ||
-		pt_equals(x1,y1, x2,y2, ctx.dist_tol) ||
-		dist_pt_seg(x1,y1, x0,y0, x2,y2) < ctx.dist_tol*ctx.dist_tol ||
+	if __ptEquals(x0,y0, x1,y1, ctx.dist_tol) ||
+		__ptEquals(x1,y1, x2,y2, ctx.dist_tol) ||
+		__distPtSeg(x1,y1, x0,y0, x2,y2) < ctx.dist_tol*ctx.dist_tol ||
 		radius < ctx.dist_tol {
-		line_to(ctx, x1, y1)
+		LineTo(ctx, x1, y1)
 		return
 	}
 
@@ -2295,20 +2290,20 @@ arc_to :: proc(
 	dy0 := y0-y1
 	dx1 := x2-x1
 	dy1 := y2-y1
-	normalize(&dx0,&dy0)
-	normalize(&dx1,&dy1)
+	__normalize(&dx0,&dy0)
+	__normalize(&dx1,&dy1)
 	a := math.acos(dx0*dx1 + dy0*dy1)
 	d := radius / math.tan(a / 2.0)
 
 	if d > 10000 {
-		line_to(ctx, x1, y1)
+		LineTo(ctx, x1, y1)
 		return
 	}
 
 	a0, a1, cx, cy: f32
 	direction: Winding
 
-	if cross(dx0,dy0, dx1,dy1) > 0.0 {
+	if __cross(dx0,dy0, dx1,dy1) > 0.0 {
 		cx = x1 + dx0*d + dy0*radius
 		cy = y1 + dy0*d + -dx0*radius
 		a0 = math.atan2(dx0, -dy0)
@@ -2322,13 +2317,13 @@ arc_to :: proc(
 		direction = .Counter_Clockwise
 	}
 
-	arc(ctx, cx, cy, radius, a0, a1, direction)
+	Arc(ctx, cx, cy, radius, a0, a1, direction)
 }
 
 // Creates new circle arc shaped sub-path. The arc center is at cx,cy, the arc radius is r,
 // and the arc is drawn from angle a0 to a1, and swept in direction dir (NVG_CCW, or NVG_CW).
 // Angles are specified in radians.
-arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
+Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 	move: Command = .Line_To if len(ctx.commands) > 0 else .Move_To
 
 	// Clamp angles
@@ -2343,7 +2338,7 @@ arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 		}
 	} else {
 		if abs(da) >= math.PI*2 {
-			da = -math.PI*2;
+			da = -math.PI*2
 		} else {
 			for da > 0.0 {
 				da -= math.PI*2
@@ -2360,17 +2355,11 @@ arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 		kappa = -kappa
 	}
 
-	set :: proc(values: ^[]f32, to: f32) {
-		values[0] = to
-		values^ = values[1:]
-	}
+	values: [3 + 5 * 7 + 100]f32
+	nvals := 0
 
-	values := make([]f32, 3 + 5 * 7 + 100)
-	defer delete(values)
-	values_origin := values[:]
-	
 	px, py, ptanx, ptany: f32
-	for i in 0..<ndivs {
+	for i in 0..=ndivs {
 		a := a0 + da * f32(i) / f32(ndivs)
 		dx := math.cos(a)
 		dy := math.sin(a)
@@ -2380,17 +2369,17 @@ arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 		tany := dx*r*kappa
 
 		if i == 0 {
-			set(&values, cmdf(move))
-			set(&values, x)
-			set(&values, y)
+			values[nvals] = __cmdf(move); nvals += 1
+			values[nvals] = x; nvals += 1
+			values[nvals] = y; nvals += 1
 		} else {
-			set(&values, cmdf(.Bezier_To))
-			set(&values, px + ptanx)
-			set(&values, py + ptany)
-			set(&values, x-tanx)
-			set(&values, y-tany)
-			set(&values, x)
-			set(&values, y)
+			values[nvals] = __cmdf(.Bezier_To); nvals += 1
+			values[nvals] = px + ptanx; nvals += 1
+			values[nvals] = py + ptany; nvals += 1
+			values[nvals] = x-tanx; nvals += 1
+			values[nvals] = y-tany; nvals += 1
+			values[nvals] = x; nvals += 1
+			values[nvals] = y; nvals += 1
 		}
 		px = x
 		py = y
@@ -2399,46 +2388,46 @@ arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 	}
 
 	// stored internally
-	append_commands(ctx, values_origin)
+	__appendCommands(ctx, values[:nvals])
 }
 
 // Closes current sub-path with a line segment.
-close_path :: proc(ctx: ^Context) {
-	values := [1]f32 { cmdf(.Close) }
-	append_commands(ctx, values[:])
+ClosePath :: proc(ctx: ^Context) {
+	values := [1]f32 { __cmdf(.Close) }
+	__appendCommands(ctx, values[:])
 }
 
 // Sets the current sub-path winding, see NVGwinding and NVGsolidity.
-path_winding :: proc(ctx: ^Context, direction: Winding) {
-	values := [2]f32 { cmdf(.Winding), f32(direction) }
-	append_commands(ctx, values[:])	
+PathWinding :: proc(ctx: ^Context, direction: Winding) {
+	values := [2]f32 { __cmdf(.Winding), f32(direction) }
+	__appendCommands(ctx, values[:])	
 }
 
 // same as path_winding but with different enum
-path_solidity :: proc(ctx: ^Context, solidity: Solidity) {
-	values := [2]f32 { cmdf(.Winding), f32(solidity) }
-	append_commands(ctx, values[:])	
+PathSolidity :: proc(ctx: ^Context, solidity: Solidity) {
+	values := [2]f32 { __cmdf(.Winding), f32(solidity) }
+	__appendCommands(ctx, values[:])	
 }
 
 // Creates new rectangle shaped sub-path.
-rect :: proc(ctx: ^Context, x, y, w, h: f32) {
+Rect :: proc(ctx: ^Context, x, y, w, h: f32) {
 	values := [?]f32 {
-		cmdf(.Move_To), x, y,
-		cmdf(.Line_To), x, y + h,
-		cmdf(.Line_To), x + w, y + h,
-		cmdf(.Line_To), x + w, y,
-		cmdf(.Close),
+		__cmdf(.Move_To), x, y,
+		__cmdf(.Line_To), x, y + h,
+		__cmdf(.Line_To), x + w, y + h,
+		__cmdf(.Line_To), x + w, y,
+		__cmdf(.Close),
 	}
-	append_commands(ctx, values[:])
+	__appendCommands(ctx, values[:])
 }
 
 // Creates new rounded rectangle shaped sub-path.
-rounded_rect :: proc(ctx: ^Context, x, y, w, h, radius: f32) {
-	rounded_rect_varying(ctx, x, y, w, h, radius, radius, radius, radius)
+RoundedRect :: proc(ctx: ^Context, x, y, w, h, radius: f32) {
+	RoundedRectVarying(ctx, x, y, w, h, radius, radius, radius, radius)
 }
 
 // Creates new rounded rectangle shaped sub-path with varying radii for each corner.
-rounded_rect_varying :: proc(
+RoundedRectVarying :: proc(
 	ctx: ^Context,
 	x, y: f32,
 	w, h: f32,
@@ -2448,7 +2437,7 @@ rounded_rect_varying :: proc(
 	radius_bottom_left: f32,
 ) {
 	if radius_top_left < 0.1 && radius_top_right < 0.1 && radius_bottom_right < 0.1 && radius_bottom_left < 0.1 {
-		rect(ctx, x, y, w, h)
+		Rect(ctx, x, y, w, h)
 	} else {
 		halfw := abs(w) * 0.5
 		halfh := abs(h) * 0.5
@@ -2461,50 +2450,50 @@ rounded_rect_varying :: proc(
 		rxTL := min(radius_top_left, halfw) * math.sign(w)
 		ryTL := min(radius_top_left, halfh) * math.sign(h)
 		values := [?]f32 {
-			cmdf(.Move_To), x, y + ryTL,
-			cmdf(.Line_To), x, y + h - ryBL,
-			cmdf(.Bezier_To), x, y + h - ryBL*(1 - KAPPA), x + rxBL*(1 - KAPPA), y + h, x + rxBL, y + h,
-			cmdf(.Line_To), x + w - rxBR, y + h,
-			cmdf(.Bezier_To), x + w - rxBR*(1 - KAPPA), y + h, x + w, y + h - ryBR*(1 - KAPPA), x + w, y + h - ryBR,
-			cmdf(.Line_To), x + w, y + ryTR,
-			cmdf(.Bezier_To), x + w, y + ryTR*(1 - KAPPA), x + w - rxTR*(1 - KAPPA), y, x + w - rxTR, y,
-			cmdf(.Line_To), x + rxTL, y,
-			cmdf(.Bezier_To), x + rxTL*(1 - KAPPA), y, x, y + ryTL*(1 - KAPPA), x, y + ryTL,
-			cmdf(.Close),
+			__cmdf(.Move_To), x, y + ryTL,
+			__cmdf(.Line_To), x, y + h - ryBL,
+			__cmdf(.Bezier_To), x, y + h - ryBL*(1 - KAPPA), x + rxBL*(1 - KAPPA), y + h, x + rxBL, y + h,
+			__cmdf(.Line_To), x + w - rxBR, y + h,
+			__cmdf(.Bezier_To), x + w - rxBR*(1 - KAPPA), y + h, x + w, y + h - ryBR*(1 - KAPPA), x + w, y + h - ryBR,
+			__cmdf(.Line_To), x + w, y + ryTR,
+			__cmdf(.Bezier_To), x + w, y + ryTR*(1 - KAPPA), x + w - rxTR*(1 - KAPPA), y, x + w - rxTR, y,
+			__cmdf(.Line_To), x + rxTL, y,
+			__cmdf(.Bezier_To), x + rxTL*(1 - KAPPA), y, x, y + ryTL*(1 - KAPPA), x, y + ryTL,
+			__cmdf(.Close),
 		}
-		append_commands(ctx, values[:])
+		__appendCommands(ctx, values[:])
 	}
 }
 
 // Creates new ellipse shaped sub-path.
-ellipse :: proc(ctx: ^Context, cx, cy, rx, ry: f32) {
+Ellipse :: proc(ctx: ^Context, cx, cy, rx, ry: f32) {
 	values := [?]f32 {
-		cmdf(.Move_To), cx-rx, cy,
-		cmdf(.Bezier_To), cx-rx, cy+ry*KAPPA, cx-rx*KAPPA, cy+ry, cx, cy+ry,
-		cmdf(.Bezier_To), cx+rx*KAPPA, cy+ry, cx+rx, cy+ry*KAPPA, cx+rx, cy,
-		cmdf(.Bezier_To), cx+rx, cy-ry*KAPPA, cx+rx*KAPPA, cy-ry, cx, cy-ry,
-		cmdf(.Bezier_To), cx-rx*KAPPA, cy-ry, cx-rx, cy-ry*KAPPA, cx-rx, cy,
-		cmdf(.Close)		
+		__cmdf(.Move_To), cx-rx, cy,
+		__cmdf(.Bezier_To), cx-rx, cy+ry*KAPPA, cx-rx*KAPPA, cy+ry, cx, cy+ry,
+		__cmdf(.Bezier_To), cx+rx*KAPPA, cy+ry, cx+rx, cy+ry*KAPPA, cx+rx, cy,
+		__cmdf(.Bezier_To), cx+rx, cy-ry*KAPPA, cx+rx*KAPPA, cy-ry, cx, cy-ry,
+		__cmdf(.Bezier_To), cx-rx*KAPPA, cy-ry, cx-rx, cy-ry*KAPPA, cx-rx, cy,
+		__cmdf(.Close)		
 	}
-	append_commands(ctx, values[:])
+	__appendCommands(ctx, values[:])
 }
 
 // Creates new circle shaped sub-path.
-circle :: #force_inline proc(ctx: ^Context, cx, cy: f32, radius: f32) {
-	ellipse(ctx, cx, cy, radius, radius)
+Circle :: #force_inline proc(ctx: ^Context, cx, cy: f32, radius: f32) {
+	Ellipse(ctx, cx, cy, radius, radius)
 }
 
 // Fills the current path with current fill style.
-fill :: proc(ctx: ^Context) {
-	state := get_state(ctx)
+Fill :: proc(ctx: ^Context) {
+	state := __getState(ctx)
 	fill_paint := state.fill
 
-	flatten_paths(ctx)
+	__flattenPaths(ctx)
 
 	if ctx.params.edge_anti_alias && state.shape_anti_alias {
-		expand_fill(ctx, ctx.fringe_width, .Miter, 2.4)
+		__expandFill(ctx, ctx.fringe_width, .Miter, 2.4)
 	} else {
-		expand_fill(ctx, 0, .Miter, 2.4)
+		__expandFill(ctx, 0, .Miter, 2.4)
 	}
 
 	// apply global alpha
@@ -2530,9 +2519,9 @@ fill :: proc(ctx: ^Context) {
 }
 
 // Fills the current path with current stroke style.
-stroke :: proc(ctx: ^Context) {
-	state := get_state(ctx)
-	scale := _get_average_scale(state.xform[:])
+Stroke :: proc(ctx: ^Context) {
+	state := __getState(ctx)
+	scale := __getAverageScale(state.xform[:])
 	stroke_width := clamp(state.stroke_width * scale, 0, 200)
 	stroke_paint := state.stroke
 
@@ -2549,12 +2538,12 @@ stroke :: proc(ctx: ^Context) {
 	stroke_paint.inner_color.a *= state.alpha
 	stroke_paint.outer_color.a *= state.alpha
 
-	flatten_paths(ctx)
+	__flattenPaths(ctx)
 
 	if ctx.params.edge_anti_alias && state.shape_anti_alias {
-		expand_stroke(ctx, stroke_width * 0.5, ctx.fringe_width, state.line_cap, state.line_join, state.miter_limit)
+		__expandStroke(ctx, stroke_width * 0.5, ctx.fringe_width, state.line_cap, state.line_join, state.miter_limit)
 	} else {
-		expand_stroke(ctx, stroke_width * 0.5, 0, state.line_cap, state.line_join, state.miter_limit)
+		__expandStroke(ctx, stroke_width * 0.5, 0, state.line_cap, state.line_join, state.miter_limit)
 	}	
 
 	assert(ctx.params.render_stroke != nil)
@@ -2574,7 +2563,7 @@ stroke :: proc(ctx: ^Context) {
 	}	
 }
 
-debug_dump_path_cache :: proc(ctx: ^Context) {
+DebugDumpPathCache :: proc(ctx: ^Context) {
 	fmt.printf("~~~~~~~~~~~~~Dumping %d cached paths\n", len(ctx.cache.paths))
 	
 	for path, i in &ctx.cache.paths {
@@ -2630,15 +2619,15 @@ debug_dump_path_cache :: proc(ctx: ^Context) {
 // Note: currently only solid color fill is supported for text.
 ///////////////////////////////////////////////////////////
 
-create_font :: proc(ctx: ^Context, name, filename: string) -> int {
+CreateFont :: proc(ctx: ^Context, name, filename: string) -> int {
 	return fontstash.font_push_file(&ctx.fs, name, filename)
 }
 
-create_font_mem :: proc(ctx: ^Context, name: string, slice: []byte) -> int {
+CreateFontMem :: proc(ctx: ^Context, name: string, slice: []byte) -> int {
 	return fontstash.font_push_slice(&ctx.fs, name, slice)
 }
 
-find_font :: proc(ctx: ^Context, name: string) -> int {
+FindFont :: proc(ctx: ^Context, name: string) -> int {
 	if name == "" {
 		return -1
 	}
@@ -2646,50 +2635,50 @@ find_font :: proc(ctx: ^Context, name: string) -> int {
 	return fontstash.font_find_by_name(&ctx.fs, name)
 }
 
-font_size :: proc(ctx: ^Context, size: f32) {
-	state := get_state(ctx)
+FontSize :: proc(ctx: ^Context, size: f32) {
+	state := __getState(ctx)
 	state.font_size = size
 }
 
-font_blur :: proc(ctx: ^Context, blur: f32) {
-	state := get_state(ctx)
+FontBlur :: proc(ctx: ^Context, blur: f32) {
+	state := __getState(ctx)
 	state.font_blur = blur
 }
 
-text_letter_spacing :: proc(ctx: ^Context, spacing: f32) {
-	state := get_state(ctx)
+TextLetterSpacing :: proc(ctx: ^Context, spacing: f32) {
+	state := __getState(ctx)
 	state.letter_spacing = spacing
 }
 
-text_line_height :: proc(ctx: ^Context, line_height: f32) {
-	state := get_state(ctx)
+TextLineHeight :: proc(ctx: ^Context, line_height: f32) {
+	state := __getState(ctx)
 	state.line_height = line_height
 }
 
-text_align_horizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
-	state := get_state(ctx)
+TextAlignHorizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
+	state := __getState(ctx)
 	state.align_horizontal = align
 }
 
-text_align_vertical :: proc(ctx: ^Context, align: Align_Vertical) {
-	state := get_state(ctx)
+TextAlignVertical :: proc(ctx: ^Context, align: Align_Vertical) {
+	state := __getState(ctx)
 	state.align_vertical = align
 }
 
-font_face :: proc(ctx: ^Context, font: string) {
-	state := get_state(ctx)
+FontFace :: proc(ctx: ^Context, font: string) {
+	state := __getState(ctx)
 	state.font_id = fontstash.font_find_by_name(&ctx.fs, font)
 }
 
-_quantize :: proc(a, d: f32) -> f32 {
+__quantize :: proc(a, d: f32) -> f32 {
 	return f32(int(a / d + 0.5)) * d
 }
 
-_get_font_scale :: proc(state: ^State) -> f32 {
-	return min(_quantize(_get_average_scale(state.xform[:]), 0.01), 4.0)
+__getFontScale :: proc(state: ^State) -> f32 {
+	return min(__quantize(__getAverageScale(state.xform[:]), 0.01), 4.0)
 }
 
-_flush_text_texture :: proc(ctx: ^Context) {
+__flushTextTexture :: proc(ctx: ^Context) {
 	dirty: [4]f32
 	assert(ctx.params.render_update_texture != nil)
 
@@ -2708,8 +2697,8 @@ _flush_text_texture :: proc(ctx: ^Context) {
 	}
 }
 
-_alloc_text_atlas :: proc(ctx: ^Context) -> bool {
-	_flush_text_texture(ctx)
+__allocTextAtlas :: proc(ctx: ^Context) -> bool {
+	__flushTextTexture(ctx)
 	
 	if ctx.font_image_idx >= MAX_FONTIMAGES - 1 {
 		return false
@@ -2718,9 +2707,9 @@ _alloc_text_atlas :: proc(ctx: ^Context) -> bool {
 	// if next fontImage already have a texture
 	iw, ih: int
 	if ctx.font_images[ctx.font_image_idx+1] != 0 {
-		iw, ih = image_size(ctx, ctx.font_images[ctx.font_image_idx+1])
+		iw, ih = ImageSize(ctx, ctx.font_images[ctx.font_image_idx+1])
 	} else { // calculate the new font image size and create it.
-		iw, ih = image_size(ctx, ctx.font_images[ctx.font_image_idx])
+		iw, ih = ImageSize(ctx, ctx.font_images[ctx.font_image_idx])
 		
 		if iw > ih {
 			ih *= 2
@@ -2742,13 +2731,13 @@ _alloc_text_atlas :: proc(ctx: ^Context) -> bool {
 	return true;
 }
 
-_render_text :: proc(ctx: ^Context, verts: []Vertex) {
+__renderText :: proc(ctx: ^Context, verts: []Vertex) {
 	// disallow 0
 	if len(verts) == 0 {
 		return
 	}
 
-	state := get_state(ctx)
+	state := __getState(ctx)
 	paint := state.fill
 
 	// Render triangles.
@@ -2764,16 +2753,16 @@ _render_text :: proc(ctx: ^Context, verts: []Vertex) {
 	ctx.text_tri_count += len(verts) / 3
 }
 
-_is_transform_flipped :: proc(xform: []f32) -> bool {
+__isTransformFlipped :: proc(xform: []f32) -> bool {
 	det := xform[0] * xform[3] - xform[2] * xform[1]
 	return det < 0
 }
 
-text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
-	state := get_state(ctx)
-	scale := _get_font_scale(state) * ctx.device_px_ratio
+Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
-	is_flipped := _is_transform_flipped(state.xform[:])
+	is_flipped := __isTransformFlipped(state.xform[:])
 
 	if state.font_id == -1 {
 		return x
@@ -2788,7 +2777,7 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	fontstash.state_set_font(fs, state.font_id)
 
 	cverts := max(2, len(text)) * 6 // conservative estimate.
-	verts := _alloc_temp_verts(ctx, cverts)
+	verts := __allocTempVerts(ctx, cverts)
 	nverts: int
 
 	// TODO add FONS_GLYPH_BITMAP_REQUIRED?
@@ -2800,11 +2789,11 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 		
 		if iter.previous_glyph_index == -1 { // can not retrieve glyph?
 			if nverts != 0 {
-				_render_text(ctx, verts[:])
+				__renderText(ctx, verts[:])
 				nverts = 0
 			}
 
-			if !_alloc_text_atlas(ctx) {
+			if !__allocTextAtlas(ctx) {
 				break // no memory :(
 			}
 
@@ -2824,10 +2813,10 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 		}
 
 		// Transform corners.
-		transform_point(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
-		transform_point(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
-		transform_point(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
-		transform_point(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
+		TransformPoint(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
+		TransformPoint(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
+		TransformPoint(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
+		TransformPoint(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
 		
 		// Create triangles
 		if nverts + 6 <= cverts {
@@ -2847,16 +2836,15 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	}
 
 	// TODO: add back-end bit to do this just once per frame.
-	_flush_text_texture(ctx)
-	_render_text(ctx, verts)
+	__flushTextTexture(ctx)
+	__renderText(ctx, verts)
 
 	return iter.nextx / scale
 }
 
-
-text_metrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
-	state := get_state(ctx)
-	scale := _get_font_scale(state) * ctx.device_px_ratio
+TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
 
 	if state.font_id == -1 {
@@ -2874,13 +2862,13 @@ text_metrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 	return fontstash.state_vertical_metrics(fs)
 }
 
-text_bounds :: proc(
+TextBounds :: proc(
 	ctx: ^Context,
 	x, y: f32,
 	input: string,
 ) -> (bounds: [4]f32) {
-	state := get_state(ctx)
-	scale := _get_font_scale(state) * ctx.device_px_ratio
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
 
 	if state.font_id == -1 {
@@ -2922,13 +2910,13 @@ Codepoint_Type :: enum {
 	CJK,
 }
 
-text_box :: proc(
+TextBox :: proc(
 	ctx: ^Context, 
 	x, y: f32,
 	break_row_width: f32,
 	input: string,
 ) {
-	state := get_state(ctx)
+	state := __getState(ctx)
 	rows: [2]Text_Row
 
 	ah := state.align_horizontal
@@ -2941,7 +2929,7 @@ text_box :: proc(
 		return
 	} 
 
-	_, _, line_height := text_metrics(ctx)
+	_, _, line_height := TextMetrics(ctx)
 	// state.textAlign = NVG_ALIGN_LEFT | valign
 	// TODO wtf are the alignments
 	state.align_horizontal = .Left
@@ -2949,7 +2937,7 @@ text_box :: proc(
 	y := y
 	input_breaks := input
 	for {
-		nrows := text_break_lines(ctx, input_breaks, break_row_width, &rows, 2)
+		nrows := TextBreakLines(ctx, input_breaks, break_row_width, &rows, 2)
 
 		if nrows == 0 {
 			break
@@ -2957,7 +2945,7 @@ text_box :: proc(
 
 		for i in 0..<nrows {
 			row := &rows[i]
-			text(ctx, x, y, input_breaks[row.start:row.end])		
+			Text(ctx, x, y, input_breaks[row.start:row.end])		
 			y += line_height * state.line_height
 		}
 
@@ -2968,15 +2956,15 @@ text_box :: proc(
 	state.align_vertical = av
 }
 
-text_break_lines :: proc(
+TextBreakLines :: proc(
 	ctx: ^Context,
 	text: string,
 	break_row_width: f32,
 	rows: ^[2]Text_Row,
 	max_rows: int,
 ) -> int {
-	state := get_state(ctx)
-	scale := _get_font_scale(state) * ctx.device_px_ratio
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
 
 	row_start_x, row_width, row_min_x, row_max_x: f32
@@ -3016,7 +3004,7 @@ text_break_lines :: proc(
 	nrows: int
 	
 	for fontstash.text_iter_step(fs, &iter, &q) {
-		if iter.previous_glyph_index < 0 && _alloc_text_atlas(ctx) { // can not retrieve glyph?
+		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
 			iter = prev_iter;
 			fontstash.text_iter_step(fs, &iter, &q) // try again
 		}

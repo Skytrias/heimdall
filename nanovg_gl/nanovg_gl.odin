@@ -12,7 +12,7 @@ Vertex :: nvg.Vertex
 Image_Flags :: nvg.Image_Flags
 Texture_Type :: nvg.Texture_Type
 Paint :: nvg.Paint
-Scissor :: nvg.Scissor
+scissor :: nvg.scissor
 
 Create_Flag :: enum {
 	// Flag indicating if geometry based anti-aliasing is used (may not be needed when using MSAA).
@@ -712,7 +712,7 @@ convert_paint :: proc(
 	ctx: ^Context,
 	frag: ^Frag_Uniforms,
 	paint: ^Paint,
-	scissor: ^Scissor,
+	scissor: ^scissor,
 	width: f32,
 	fringe: f32,
 	stroke_thr: f32,
@@ -729,7 +729,7 @@ convert_paint :: proc(
 		frag.scissor_scale[0] = 1.0
 		frag.scissor_scale[1] = 1.0
 	} else {
-		nvg.transform_inverse(&invxform, scissor.xform)
+		nvg.TransformInverse(&invxform, scissor.xform)
 		xform_to_mat3x4(&frag.scissor_mat, invxform)
 		frag.scissor_ext[0] = scissor.extent[0]
 		frag.scissor_ext[1] = scissor.extent[1]
@@ -752,15 +752,15 @@ convert_paint :: proc(
 		if .Flip_Y in tex.flags {
 			m1: [6]f32
 			m2: [6]f32
-			nvg.transform_translate(&m1, 0.0, frag.extent[1] * 0.5)
-			nvg.transform_multiply(&m1, paint.xform)
-			nvg.transform_scale(&m2, 1.0, -1.0)
-			nvg.transform_multiply(&m2, m1)
-			nvg.transform_translate(&m1, 0.0, -frag.extent[1] * 0.5)
-			nvg.transform_multiply(&m1, m2)
-			nvg.transform_inverse(&invxform, m1)
+			nvg.TransformTranslate(&m1, 0.0, frag.extent[1] * 0.5)
+			nvg.TransformMultiply(&m1, paint.xform)
+			nvg.TransformScale(&m2, 1.0, -1.0)
+			nvg.TransformMultiply(&m2, m1)
+			nvg.TransformTranslate(&m1, 0.0, -frag.extent[1] * 0.5)
+			nvg.TransformMultiply(&m1, m2)
+			nvg.TransformInverse(&invxform, m1)
 		} else {
-			nvg.transform_inverse(&invxform, paint.xform)
+			nvg.TransformInverse(&invxform, paint.xform)
 		}
 
 		frag.type = .Fill_Img
@@ -782,7 +782,7 @@ convert_paint :: proc(
 		frag.type = .Fill_Grad
 		frag.radius = paint.radius
 		frag.feather = paint.feather
-		nvg.transform_inverse(&invxform, paint.xform)
+		nvg.TransformInverse(&invxform, paint.xform)
 	}
 
 	xform_to_mat3x4(&frag.paint_mat, invxform)
@@ -1104,7 +1104,7 @@ render_fill :: proc(
 	uptr: rawptr, 
 	paint: ^nvg.Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
-	scissor: ^Scissor,
+	scissor: ^scissor,
 	fringe: f32,
 	bounds: [4]f32,
 	paths: []nvg.Path,
@@ -1194,7 +1194,7 @@ render_stroke :: proc(
 	uptr: rawptr, 
 	paint: ^Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
-	scissor: ^Scissor,
+	scissor: ^scissor,
 	fringe: f32,
 	stroke_width: f32,
 	paths: []nvg.Path,
@@ -1267,7 +1267,7 @@ render_triangles :: proc(
 	uptr: rawptr, 
 	paint: ^Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
-	scissor: ^Scissor,
+	scissor: ^scissor,
 	verts: []Vertex,
 	fringe: f32,
 ) {
@@ -1346,9 +1346,9 @@ create :: proc(flags: Create_Flags) -> ^nvg.Context {
 	params.user_ptr = ctx
 	params.edge_anti_alias = (.Anti_Alias in flags)
 	ctx.flags = flags
-	return nvg.create_internal(params)
+	return nvg.CreateInternal(params)
 }
 
 destroy :: proc(ctx: ^nvg.Context) {
-	nvg.delete_internal(ctx)
+	nvg.DeleteInternal(ctx)
 }
