@@ -1868,8 +1868,6 @@ calculate_joins :: proc(
 				}
 			}
 
-			// TODO check this out
-			// if (p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0 {
 			if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
 				path.nbevel += 1
 			}
@@ -1882,13 +1880,11 @@ calculate_joins :: proc(
 	}
 }
 
-// TODO changes this
+// TODO could be done better? or not need dynamic
 alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
 	old := len(ctx.cache.verts)
 	resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
-	// return mem.slice_ptr(raw_data(ctx.cache.verts), nverts)
 	return ctx.cache.verts[old:old+nverts]
-	// return make([]Vertex, nverts, context.temp_allocator)
 }
 
 expand_stroke :: proc(
@@ -2133,8 +2129,6 @@ expand_fill :: proc(
 			p1 = &pts[0]
 
 			for j in 0..<path.count {
-				// TODO check this
-				// if ((p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0) {
 				if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
 					bevel_join(&dst, p0, p1, lw, rw, lu, ru)
 				} else {
@@ -2147,8 +2141,8 @@ expand_fill :: proc(
 			}
 
 			// Loop it
-			vset(&dst, verts[0].x, verts[0].y, lu,1)
-			vset(&dst, verts[1].x, verts[1].y, ru,1)
+			vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, lu,1)
+			vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, ru,1)
 
 			dst_diff := dst_start_length - len(dst) 
 			path.stroke = verts[dst_index:dst_index + dst_diff]
