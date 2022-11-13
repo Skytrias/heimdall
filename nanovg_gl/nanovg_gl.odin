@@ -334,7 +334,7 @@ render_create :: proc(uptr: rawptr) -> bool {
 	check_error(ctx, "init")
 
 	shader_header := strings.to_string(builder)
-	anti: string = .Anti_Alias in ctx.flags ? "#define EDGE_AA 1\n" : ""
+	anti: string = .Anti_Alias in ctx.flags ? "#define EDGE_AA 1\n" : " "
 	if !create_shader(
 		&ctx.shader, 
 		shader_header,
@@ -701,6 +701,7 @@ convert_paint :: proc(
 	stroke_thr: f32,
 ) -> bool {
 	invxform: [6]f32
+	frag^ = {}
 	frag.inner_color = premul_color(paint.inner_color)
 	frag.outer_color = premul_color(paint.outer_color)
 
