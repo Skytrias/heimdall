@@ -4,7 +4,11 @@ import "core:mem"
 import "core:runtime"
 import "core:math"
 import "core:fmt"
+import "../fontstash"
 import stbi "vendor:stb/image"
+
+Align_Vertical :: fontstash.Align_Vertical
+Align_Horizontal :: fontstash.Align_Horizontal
 
 INIT_FONTIMAGE_SIZE :: 512
 MAX_FONTIMAGE_SIZE :: 2048
@@ -151,19 +155,6 @@ Path :: struct {
 	convex: bool,
 }
 
-Align_Horizontal :: enum {
-	Left,
-	Center,
-	Right,
-}
-
-Align_Vertical :: enum {
-	Top,
-	Middle,
-	Bottom,
-	Baseline, // TODO make this default at 0?
-}
-
 State :: struct {
 	composite_operation: Composite_Operation_State,
 	shape_anti_alias: bool,
@@ -200,6 +191,7 @@ Context :: struct {
 	device_px_ratio: f32,
 
 	// font
+	fs: fontstash.Font_Context,
 	font_images: [MAX_FONTIMAGES]int,
 	font_image_idx: int,
 
@@ -309,6 +301,7 @@ create_internal :: proc(params: Params) -> (ctx: ^Context) {
 
 	w := INIT_FONTIMAGE_SIZE
 	h := INIT_FONTIMAGE_SIZE
+	fontstash.init(&ctx.fs, w, h)
 	assert(ctx.params.render_create_texture != nil)
 	ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, nil)
 	ctx.font_image_idx = 0
@@ -318,6 +311,7 @@ create_internal :: proc(params: Params) -> (ctx: ^Context) {
 
 delete_internal :: proc(ctx: ^Context) {
 	path_cache_destroy(ctx.cache)
+	fontstash.destroy(&ctx.fs)
 
 	for image in &ctx.font_images {
 		if image != 0 {
@@ -1355,7 +1349,8 @@ path_set_winding :: proc(ctx: ^Context, winding: Winding) {
 	path.winding = winding
 }
 
-get_average_scale :: proc(t: Rect) -> f32 {
+_get_average_scale :: proc(t: []f32) -> f32 {
+	assert(len(t) > 4)
 	sx := math.sqrt(t[0] * t[0] + t[2] * t[2])
 	sy := math.sqrt(t[1] * t[1] + t[3] * t[3])
 	return (sx + sy) * 0.5
@@ -1907,10 +1902,12 @@ calculate_joins :: proc(
 }
 
 // TODO could be done better? or not need dynamic
-alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
-	old := len(ctx.cache.verts)
-	resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
-	return ctx.cache.verts[old:old+nverts]
+_alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
+	// old := len(ctx.cache.verts)
+	// resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
+	// return ctx.cache.verts[old:old+nverts]
+	resize(&ctx.cache.verts, nverts)
+	return ctx.cache.verts[:]
 }
 
 expand_stroke :: proc(
@@ -1960,7 +1957,7 @@ expand_stroke :: proc(
 		}
 	}
 
-	verts := alloc_temp_verts(ctx, cverts)
+	verts := _alloc_temp_verts(ctx, cverts)
 	dst_index: int
 
 	for i in 0..<len(cache.paths) {
@@ -2078,7 +2075,7 @@ expand_fill :: proc(
 	}
 
 	convex := len(cache.paths) == 1 && cache.paths[0].convex
-	verts := alloc_temp_verts(ctx, cverts)
+	verts := _alloc_temp_verts(ctx, cverts)
 	dst_index: int
 
 	for path in &cache.paths {
@@ -2282,7 +2279,7 @@ arc_to :: proc(
 	normalize(&dx1,&dy1)
 	a := math.acos(dx0*dx1 + dy0*dy1)
 	d := radius / math.tan(a / 2.0)
-	
+
 	if d > 10000 {
 		line_to(ctx, x1, y1)
 		return
@@ -2509,9 +2506,7 @@ fill :: proc(ctx: ^Context) {
 // Fills the current path with current stroke style.
 stroke :: proc(ctx: ^Context) {
 	state := get_state(ctx)
-	temp: [4]f32 
-	copy(temp[:], state.xform[:])
-	scale := get_average_scale(temp)
+	scale := _get_average_scale(state.xform[:])
 	stroke_width := clamp(state.stroke_width * scale, 0, 200)
 	stroke_paint := state.stroke
 
@@ -2577,3 +2572,257 @@ debug_dump_path_cache :: proc(ctx: ^Context) {
 	}
 }
 
+///////////////////////////////////////////////////////////
+// NanoVG allows you to load .ttf files and use the font to render text.
+//
+// The appearance of the text can be defined by setting the current text style
+// and by specifying the fill color. Common text and font settings such as
+// font size, letter spacing and text align are supported. Font blur allows you
+// to create simple text effects such as drop shadows.
+//
+// At render time the font face can be set based on the font handles or name.
+//
+// Font measure functions return values in local space, the calculations are
+// carried in the same resolution as the final rendering. This is done because
+// the text glyph positions are snapped to the nearest pixels sharp rendering.
+//
+// The local space means that values are not rotated or scale as per the current
+// transformation. For example if you set font size to 12, which would mean that
+// line height is 16, then regardless of the current scaling and rotation, the
+// returned line height is always 16. Some measures may vary because of the scaling
+// since aforementioned pixel snapping.
+//
+// While this may sound a little odd, the setup allows you to always render the
+// same way regardless of scaling. I.e. following works regardless of scaling:
+//
+//		const char* txt = "Text me up.";
+//		nvgTextBounds(vg, x,y, txt, NULL, bounds);
+//		nvgBeginPath(vg);
+//		nvgRoundedRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
+//		nvgFill(vg);
+//
+// Note: currently only solid color fill is supported for text.
+///////////////////////////////////////////////////////////
+
+create_font :: proc(ctx: ^Context, name, filename: string) -> int {
+	return fontstash.font_push_file(&ctx.fs, name, filename)
+}
+
+create_font_mem :: proc(ctx: ^Context, name: string, slice: []byte) -> int {
+	return fontstash.font_push_slice(&ctx.fs, name, slice)
+}
+
+find_font :: proc(ctx: ^Context, name: string) -> int {
+	if name == "" {
+		return -1
+	}
+
+	return fontstash.font_find_by_name(&ctx.fs, name)
+}
+
+font_size :: proc(ctx: ^Context, size: f32) {
+	state := get_state(ctx)
+	state.font_size = size
+}
+
+font_blur :: proc(ctx: ^Context, blur: f32) {
+	state := get_state(ctx)
+	state.font_blur = blur
+}
+
+font_text_letter_spacing :: proc(ctx: ^Context, spacing: f32) {
+	state := get_state(ctx)
+	state.letter_spacing = spacing
+}
+
+font_text_line_height :: proc(ctx: ^Context, line_height: f32) {
+	state := get_state(ctx)
+	state.line_height = line_height
+}
+
+font_text_align_horizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
+	state := get_state(ctx)
+	state.align_horizontal = align
+}
+
+font_text_align_vertical :: proc(ctx: ^Context, align: Align_Vertical) {
+	state := get_state(ctx)
+	state.align_vertical = align
+}
+
+font_face :: proc(ctx: ^Context, font: string) {
+	state := get_state(ctx)
+	state.font_id = fontstash.font_find_by_name(&ctx.fs, font)
+}
+
+_quantize :: proc(a, d: f32) -> f32 {
+	return f32(int(a / d + 0.5)) * d
+}
+
+_get_font_scale :: proc(state: ^State) -> f32 {
+	return min(_quantize(_get_average_scale(state.xform[:]), 0.01), 4.0)
+}
+
+_flush_text_texture :: proc(ctx: ^Context) {
+	dirty: [4]f32
+	assert(ctx.params.render_update_texture != nil)
+
+	if fontstash.validate_texture(&ctx.fs, &dirty) {
+		font_image := ctx.font_images[ctx.font_image_idx]
+		
+		// Update texture
+		if font_image != 0 {
+			data := ctx.fs.texture_data
+			x := dirty[0]
+			y := dirty[1]
+			w := dirty[2] - dirty[0]
+			h := dirty[3] - dirty[1]
+			ctx.params.render_update_texture(ctx.params.user_ptr, font_image, int(x), int(y), int(w), int(h), data)
+		}
+	}
+}
+
+_alloc_text_atlas :: proc(ctx: ^Context) -> bool {
+	_flush_text_texture(ctx)
+	
+	if ctx.font_image_idx >= MAX_FONTIMAGES - 1 {
+		return false
+	}
+	
+	// if next fontImage already have a texture
+	iw, ih: int
+	if ctx.font_images[ctx.font_image_idx+1] != 0 {
+		iw, ih = image_size(ctx, ctx.font_images[ctx.font_image_idx+1])
+	} else { // calculate the new font image size and create it.
+		iw, ih = image_size(ctx, ctx.font_images[ctx.font_image_idx])
+		
+		if iw > ih {
+			ih *= 2
+		}	else {
+			iw *= 2
+		}
+
+		if iw > MAX_FONTIMAGE_SIZE || ih > MAX_FONTIMAGE_SIZE {
+			iw = MAX_FONTIMAGE_SIZE
+			ih = MAX_FONTIMAGE_SIZE
+		}
+
+		ctx.font_images[ctx.font_image_idx + 1] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, iw, ih, {}, nil)
+	}
+
+	ctx.font_image_idx += 1
+	fontstash.reset_atlas(&ctx.fs, iw, ih)
+
+	return true;
+}
+
+_render_text :: proc(ctx: ^Context, verts: []Vertex) {
+	// disallow 0
+	if len(verts) == 0 {
+		return
+	}
+
+	state := get_state(ctx)
+	paint := state.fill
+
+	// Render triangles.
+	paint.image = ctx.font_images[ctx.font_image_idx]
+
+	// Apply global alpha
+	paint.inner_color.a *= state.alpha
+	paint.outer_color.a *= state.alpha
+
+	ctx.params.render_triangles(ctx.params.user_ptr, &paint, state.composite_operation, &state.scissor, verts, ctx.fringe_width)
+	
+	ctx.draw_call_count += 1
+	ctx.text_tri_count += len(verts) / 3
+}
+
+_is_transform_flipped :: proc(xform: []f32) -> bool {
+	det := xform[0] * xform[3] - xform[2] * xform[1]
+	return det < 0
+}
+
+text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
+	state := get_state(ctx)
+	scale := _get_font_scale(state) * ctx.device_px_ratio
+	invscale := 1.0 / scale
+	is_flipped := _is_transform_flipped(state.xform[:])
+
+	if state.font_id == -1 {
+		return x
+	}
+
+	fs := &ctx.fs
+	fontstash.state_set_size(fs, state.font_size * scale)
+	fontstash.state_set_spacing(fs, state.letter_spacing * scale)
+	fontstash.state_set_blur(fs, state.font_blur * scale)
+	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
+	fontstash.state_set_align_vertical(fs, state.align_vertical)
+	fontstash.state_set_font(fs, state.font_id)
+
+	cverts := max(2, len(text)) * 6 // conservative estimate.
+	verts := _alloc_temp_verts(ctx, cverts)
+	nverts: int
+
+	// TODO add FONS_GLYPH_BITMAP_REQUIRED?
+	iter := fontstash.text_iter_init(fs, text, x * scale, y * scale)
+	prev_iter := iter
+	q: fontstash.Quad
+	for fontstash.text_iter_step(&ctx.fs, &iter, &q) {
+		c: [4 * 2]f32
+		
+		if iter.previous_glyph_index == -1 { // can not retrieve glyph?
+			if nverts != 0 {
+				_render_text(ctx, verts[:])
+				nverts = 0
+			}
+
+			if !_alloc_text_atlas(ctx) {
+				break // no memory :(
+			}
+
+			iter = prev_iter
+			fontstash.text_iter_step(fs, &iter, &q) // try again
+			
+			if iter.previous_glyph_index == -1 {
+				// still can not find glyph?
+				break
+			} 
+		}
+		
+		prev_iter = iter
+		if is_flipped {
+			q.y0, q.y1 = q.y1, q.y0
+			q.t0, q.t1 = q.t1, q.t0
+		}
+
+		// Transform corners.
+		transform_point(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
+		transform_point(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
+		transform_point(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
+		transform_point(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
+		
+		// Create triangles
+		if nverts + 6 <= cverts {
+			verts[nverts] = { c[0], c[1], q.s0, q.t0 }
+			nverts += 1
+			verts[nverts] = { c[4], c[5], q.s1, q.t1 }
+			nverts += 1
+			verts[nverts] = { c[2], c[3], q.s1, q.t0 }
+			nverts += 1
+			verts[nverts] = { c[0], c[1], q.s0, q.t0 }
+			nverts += 1
+			verts[nverts] = { c[6], c[7], q.s0, q.t1 }
+			nverts += 1
+			verts[nverts] = { c[4], c[5], q.s1, q.t1 }
+			nverts += 1
+		}
+	}
+
+	// TODO: add back-end bit to do this just once per frame.
+	_flush_text_texture(ctx)
+	_render_text(ctx, verts)
+
+	return iter.nextx / scale
+}
