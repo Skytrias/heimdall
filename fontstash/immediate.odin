@@ -35,8 +35,13 @@ Text_Iter :: struct {
 	state: rune, // utf8
 	codepoint: rune,
 	text: string,
-	byte_offset: int,
+	// byte_offset: int,
 	codepoint_count: int,
+
+	// byte indices
+	str: int,
+	next: int,
+	end: int,
 }
 
 // push a state, copies the current one over to the next one
@@ -190,6 +195,11 @@ text_iter_init :: proc(
 	res.previous_glyph_index = -1
 	res.spacing = state.spacing
 	res.text = text
+
+	res.str = 0
+	res.next = 0
+	res.end = len(text)
+
 	return
 }
 
@@ -199,11 +209,13 @@ text_iter_step :: proc(
 	iter: ^Text_Iter, 
 	quad: ^Quad,
 ) -> (ok: bool) {
-	for iter.byte_offset < len(iter.text) {
-		b := iter.text[iter.byte_offset]
-		iter.byte_offset += 1
+	str := iter.next
+	iter.str = iter.next
 
-		if _decode(&iter.state, &iter.codepoint, b) {
+	for str < iter.end {
+		defer str += 1
+
+		if _decode(&iter.state, &iter.codepoint, iter.text[str]) {
 			iter.x = iter.nextx
 			iter.y = iter.nexty
 			iter.codepoint_count += 1
@@ -219,6 +231,7 @@ text_iter_step :: proc(
 		}
 	}
 
+	iter.next = str
 	return
 }
 

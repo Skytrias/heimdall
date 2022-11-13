@@ -632,6 +632,12 @@ restore :: proc(ctx: ^Context) {
 	ctx.state_count -= 1
 }
 
+// NOTE useful helper
+@(deferred_in=restore)
+save_scoped :: #force_inline proc(ctx: ^Context) {
+	save(ctx)
+}
+
 set_paint_color :: proc(p: ^Paint, color: Color) {
 	p^ = {}
 	transform_identity(&p.xform)
@@ -2209,6 +2215,21 @@ begin_path :: proc(ctx: ^Context) {
 	path_cache_clear(ctx)
 }
 
+@(deferred_in=fill)
+begin_fill :: proc(ctx: ^Context) {
+	begin_path(ctx)
+}
+
+@(deferred_in=stroke)
+begin_stroke :: proc(ctx: ^Context) {
+	begin_path(ctx)
+}
+
+@(deferred_in=stroke)
+begin_fill_stroke :: proc(ctx: ^Context) {
+		
+}
+
 // Starts new sub-path with specified point as first point.
 move_to :: proc(ctx: ^Context, x, y: f32) {
 	values := [?]f32 { cmdf(.Move_To), x, y }
@@ -2391,6 +2412,12 @@ close_path :: proc(ctx: ^Context) {
 // Sets the current sub-path winding, see NVGwinding and NVGsolidity.
 path_winding :: proc(ctx: ^Context, direction: Winding) {
 	values := [2]f32 { cmdf(.Winding), f32(direction) }
+	append_commands(ctx, values[:])	
+}
+
+// same as path_winding but with different enum
+path_solidity :: proc(ctx: ^Context, solidity: Solidity) {
+	values := [2]f32 { cmdf(.Winding), f32(solidity) }
 	append_commands(ctx, values[:])	
 }
 
@@ -2596,7 +2623,7 @@ debug_dump_path_cache :: proc(ctx: ^Context) {
 // same way regardless of scaling. I.e. following works regardless of scaling:
 //
 //		const char* txt = "Text me up.";
-//		nvgTextBounds(vg, x,y, txt, NULL, bounds);
+//		nvgTextBounds(vg, x,y, txt, nil, bounds);
 //		nvgBeginPath(vg);
 //		nvgRoundedRect(vg, bounds[0],bounds[1], bounds[2]-bounds[0], bounds[3]-bounds[1]);
 //		nvgFill(vg);
@@ -2630,22 +2657,22 @@ font_blur :: proc(ctx: ^Context, blur: f32) {
 	state.font_blur = blur
 }
 
-font_text_letter_spacing :: proc(ctx: ^Context, spacing: f32) {
+text_letter_spacing :: proc(ctx: ^Context, spacing: f32) {
 	state := get_state(ctx)
 	state.letter_spacing = spacing
 }
 
-font_text_line_height :: proc(ctx: ^Context, line_height: f32) {
+text_line_height :: proc(ctx: ^Context, line_height: f32) {
 	state := get_state(ctx)
 	state.line_height = line_height
 }
 
-font_text_align_horizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
+text_align_horizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
 	state := get_state(ctx)
 	state.align_horizontal = align
 }
 
-font_text_align_vertical :: proc(ctx: ^Context, align: Align_Vertical) {
+text_align_vertical :: proc(ctx: ^Context, align: Align_Vertical) {
 	state := get_state(ctx)
 	state.align_vertical = align
 }
@@ -2827,67 +2854,6 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	return iter.nextx / scale
 }
 
-Text_Row :: struct {
-	start: string,
-	end: string,
-	next: string,
-	width: f32,
-	minx, maxx: f32,
-}
-
-Codepoint_Type :: enum {
-	Space,
-	Newline,
-	Char,
-	CJK,
-}
-
-text_box :: proc(
-	ctx: ^Context, 
-	x, y: f32,
-	break_row_width: f32,
-	text: string,
-) {
-	state := get_state(ctx)
-	rows: [2]Text_Row
-
-	ah := state.align_horizontal
-	av := state.align_vertical
-	// halign := state.textAlign & (NVG_ALIGN_LEFT | NVG_ALIGN_CENTER | NVG_ALIGN_RIGHT)
-	// valign := state.textAlign & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE)
-	lineh := 0
-
-	if state.font_id == -1 {
-		return
-	} 
-
-	_, _, line_height := text_metrics(ctx)
-	// state.textAlign = NVG_ALIGN_LEFT | valign
-	// TODO wtf are the alignments
-
-	// for 
-	y := y
-	// while ((nrows = nvgTextBreakLines(ctx, string, end, breakRowWidth, rows, 2))) {
-		// for (i = 0 i < nrows i++) {
-			// NVGtextRow* row = &rows[i]
-			
-			// if (haling & NVG_ALIGN_LEFT) {
-			// 	text(ctx, x, y, row.start, row.end)
-			// }	else if (haling & NVG_ALIGN_CENTER) {
-			// 	text(ctx, x + breakRowWidth*0.5f - row.width*0.5f, y, row.start, row.end)
-			// }	else if (haling & NVG_ALIGN_RIGHT) {
-			// 	text(ctx, x + breakRowWidth - row.width, y, row.start, row.end)
-			// }
-			
-		// 	y += line_height * state.line_height
-		// }
-
-		// string = rows[nrows-1].next
-	// }
-
-	state.align_horizontal = ah
-	state.align_vertical = av
-}
 
 text_metrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 	state := get_state(ctx)
@@ -2912,7 +2878,7 @@ text_metrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 text_bounds :: proc(
 	ctx: ^Context,
 	x, y: f32,
-	text: string,
+	input: string,
 ) -> (bounds: [4]f32) {
 	state := get_state(ctx)
 	scale := _get_font_scale(state) * ctx.device_px_ratio
@@ -2930,7 +2896,7 @@ text_bounds :: proc(
 	fontstash.state_set_align_vertical(fs, state.align_vertical)
 	fontstash.state_set_font(fs, state.font_id)
 
-	width := fontstash.text_bounds(fs, text, x * scale, y * scale, &bounds)
+	width := fontstash.text_bounds(fs, input, x * scale, y * scale, &bounds)
 	
 	// Use line bounds for height.
 	bounds[1], bounds[3] = fontstash.line_bounds(fs, y*scale)
@@ -2942,8 +2908,293 @@ text_bounds :: proc(
 	return width * invscale
 }
 
-text_break_lines :: proc(
+Text_Row :: struct {
+	start: int,
+	end: int,
+	next: int,
+	width: f32,
+	minx, maxx: f32,
+}
 
+Codepoint_Type :: enum {
+	Space,
+	Newline,
+	Char,
+	CJK,
+}
+
+text_box :: proc(
+	ctx: ^Context, 
+	x, y: f32,
+	break_row_width: f32,
+	input: string,
 ) {
-		
+	state := get_state(ctx)
+	rows: [2]Text_Row
+
+	ah := state.align_horizontal
+	av := state.align_vertical
+	// halign := state.textAlign & (NVG_ALIGN_LEFT | NVG_ALIGN_CENTER | NVG_ALIGN_RIGHT)
+	// valign := state.textAlign & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE)
+	lineh := 0
+
+	if state.font_id == -1 {
+		return
+	} 
+
+	_, _, line_height := text_metrics(ctx)
+	// state.textAlign = NVG_ALIGN_LEFT | valign
+	// TODO wtf are the alignments
+	state.align_horizontal = .Left
+
+	y := y
+	input_breaks := input
+	for {
+		nrows := text_break_lines(ctx, input_breaks, break_row_width, &rows, 2)
+
+		if nrows == 0 {
+			break
+		}
+
+		for i in 0..<nrows {
+			row := &rows[i]
+			text(ctx, x, y, input_breaks[row.start:row.end])		
+			y += line_height * state.line_height
+		}
+
+		input_breaks = input[rows[nrows - 1].next:]
+	}
+
+	state.align_horizontal = ah
+	state.align_vertical = av
+}
+
+text_break_lines :: proc(
+	ctx: ^Context,
+	text: string,
+	break_row_width: f32,
+	rows: ^[2]Text_Row,
+	max_rows: int,
+) -> int {
+	state := get_state(ctx)
+	scale := _get_font_scale(state) * ctx.device_px_ratio
+	invscale := 1.0 / scale
+
+	row_start_x, row_width, row_min_x, row_max_x: f32
+
+	row_start: int = -1
+	row_end: int = -1
+	word_start: int = -1
+	break_end: int = -1
+	word_start_x, word_min_x: f32
+
+	break_width, break_max_x: f32
+	type := Codepoint_Type.Space
+	ptype := Codepoint_Type.Space
+	pcodepoint: rune
+
+	if max_rows == 0 || state.font_id == -1 {
+		return 0
+	}
+
+	// if (end == nil)
+	// 	end = string + strlen(string);
+
+	// if (string == end) return 0;
+
+	fs := &ctx.fs
+	fontstash.state_set_size(fs, state.font_size * scale)
+	fontstash.state_set_spacing(fs, state.letter_spacing * scale)
+	fontstash.state_set_blur(fs, state.font_blur * scale)
+	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
+	fontstash.state_set_align_vertical(fs, state.align_vertical)
+	fontstash.state_set_font(fs, state.font_id)
+
+	break_row_width := break_row_width * scale
+	iter := fontstash.text_iter_init(fs, text, 0, 0)
+	prev_iter := iter
+	q: fontstash.Quad
+	nrows: int
+	
+	for fontstash.text_iter_step(fs, &iter, &q) {
+		if iter.previous_glyph_index < 0 && _alloc_text_atlas(ctx) { // can not retrieve glyph?
+			iter = prev_iter;
+			fontstash.text_iter_step(fs, &iter, &q) // try again
+		}
+		prev_iter = iter
+
+		switch iter.codepoint {
+			case 9, 11, 12, 32, 0x00a0: {
+				// \t
+				// \v
+				// \f
+				// space
+				// NBSP
+				type = .Space
+			}
+
+			case 10:{
+				// \n
+				type = pcodepoint == 13 ? .Space : .Newline
+			}
+			
+			case 13: {
+				// \r
+				type = pcodepoint == 10 ? .Space : .Newline
+			}
+
+			case 0x0085: { 
+				// NEL
+				type = .Newline
+			}
+
+			case: {
+				if (iter.codepoint >= 0x4E00 && iter.codepoint <= 0x9FFF) ||
+					(iter.codepoint >= 0x3000 && iter.codepoint <= 0x30FF) ||
+					(iter.codepoint >= 0xFF00 && iter.codepoint <= 0xFFEF) ||
+					(iter.codepoint >= 0x1100 && iter.codepoint <= 0x11FF) ||
+					(iter.codepoint >= 0x3130 && iter.codepoint <= 0x318F) ||
+					(iter.codepoint >= 0xAC00 && iter.codepoint <= 0xD7AF) {
+					type = .CJK
+				}	else {
+					type = .Char
+				}
+			}
+		}
+
+		if type == .Newline {
+			// Always handle new lines.
+			rows[nrows].start = row_start != -1 ? row_start : iter.str
+			rows[nrows].end = row_end != -1 ? row_end : iter.str
+			rows[nrows].width = row_width * invscale
+			rows[nrows].minx = row_min_x * invscale
+			rows[nrows].maxx = row_max_x * invscale
+			rows[nrows].next = iter.next
+			nrows += 1
+			
+			if nrows >= max_rows {
+				return nrows
+			}
+
+			// Set nil break point
+			break_end = row_start
+			break_width = 0.0
+			break_max_x = 0.0
+			// Indicate to skip the white space at the beginning of the row.
+			row_start = -1
+			row_end = -1
+			row_width = 0
+			row_min_x = 0
+			row_max_x = 0
+		} else {
+			if row_start == -1 {
+				// Skip white space until the beginning of the line
+				if type == .Char || type == .CJK {
+					// The current char is the row so far
+					row_start_x = iter.x
+					row_start = iter.str
+					row_end = iter.next
+					row_width = iter.nextx - row_start_x
+					row_min_x = q.x0 - row_start_x
+					row_max_x = q.x1 - row_start_x
+					word_start = iter.str
+					word_start_x = iter.x
+					word_min_x = q.x0 - row_start_x
+					// Set nil break point
+					break_end = row_start
+					break_width = 0.0
+					break_max_x = 0.0
+				}
+			} else {
+				next_width := iter.nextx - row_start_x
+
+				// track last non-white space character
+				if type == .Char || type == .CJK {
+					row_end = iter.next
+					row_width = iter.nextx - row_start_x
+					row_max_x = q.x1 - row_start_x
+				}
+				// track last end of a word
+				if ((ptype == .Char || ptype == .CJK) && type == .Space) || type == .CJK {
+					break_end = iter.str
+					break_width = row_width
+					break_max_x = row_max_x
+				}
+				// track last beginning of a word
+				if ((ptype == .Space && (type == .Char || type == .CJK)) || type == .CJK) {
+					word_start = iter.str
+					word_start_x = iter.x
+					word_min_x = q.x0
+				}
+
+				// Break to new line when a character is beyond break width.
+				if (type == .Char || type == .CJK) && next_width > break_row_width {
+					// The run length is too long, need to break to new line.
+					if (break_end == row_start) {
+						// The current word is longer than the row length, just break it from here.
+						rows[nrows].start = row_start
+						rows[nrows].end = iter.str
+						rows[nrows].width = row_width * invscale
+						rows[nrows].minx = row_min_x * invscale
+						rows[nrows].maxx = row_max_x * invscale
+						rows[nrows].next = iter.str
+						nrows += 1
+
+						if nrows >= max_rows {
+							return nrows
+						}
+
+						row_start_x = iter.x
+						row_start = iter.str
+						row_end = iter.next
+						row_width = iter.nextx - row_start_x
+						row_min_x = q.x0 - row_start_x
+						row_max_x = q.x1 - row_start_x
+						word_start = iter.str
+						word_start_x = iter.x
+						word_min_x = q.x0 - row_start_x
+					} else {
+						// Break the line from the end of the last word, and start new line from the beginning of the new.
+						rows[nrows].start = row_start
+						rows[nrows].end = break_end
+						rows[nrows].width = break_width * invscale
+						rows[nrows].minx = row_min_x * invscale
+						rows[nrows].maxx = break_max_x * invscale
+						rows[nrows].next = word_start
+						nrows += 1
+						if nrows >= max_rows {
+							return nrows
+						}
+						// Update row
+						row_start_x = word_start_x
+						row_start = word_start
+						row_end = iter.next
+						row_width = iter.nextx - row_start_x
+						row_min_x = word_min_x - row_start_x
+						row_max_x = q.x1 - row_start_x
+					}
+					// Set nil break point
+					break_end = row_start
+					break_width = 0.0
+					break_max_x = 0.0
+				}
+			}
+		}
+
+		pcodepoint = iter.codepoint
+		ptype = type
+	}
+
+	// Break the line from the end of the last word, and start new line from the beginning of the new.
+	if row_start != -1 {
+		rows[nrows].start = row_start
+		rows[nrows].end = row_end
+		rows[nrows].width = row_width * invscale
+		rows[nrows].minx = row_min_x * invscale
+		rows[nrows].maxx = row_max_x * invscale
+		rows[nrows].next = iter.end
+		nrows += 1
+	}
+
+	return nrows	
 }

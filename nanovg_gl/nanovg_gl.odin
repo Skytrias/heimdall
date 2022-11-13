@@ -1112,8 +1112,6 @@ render_fill :: proc(
 	ctx := cast(^Context) uptr
 	call := alloc_call(ctx)
 
-	// fmt.eprintln("PAINT", paint)
-
 	call.type = .Fill
 	call.triangle_count = 4
 	call.path_offset = alloc_paths(ctx, len(paths))
