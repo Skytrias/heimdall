@@ -705,7 +705,7 @@ premul_color :: proc(c: Color) -> (res: Color) {
 	res.r *= c.a
 	res.g *= c.a
 	res.b *= c.a
-	return c
+	return
 }
 
 convert_paint :: proc(

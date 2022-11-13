@@ -414,10 +414,10 @@ RGB :: proc(r, g, b: u8) -> Color {
 
 // Returns a color value from red, green, blue and alpha values.
 RGBA :: proc(r, g, b, a: u8) -> (res: Color) {
-	res.r = f32(r) / 255
-	res.g = f32(g) / 255
-	res.b = f32(b) / 255
-	res.a = f32(a) / 255
+	res.r = f32(r) / f32(255)
+	res.g = f32(g) / f32(255)
+	res.b = f32(b) / f32(255)
+	res.a = f32(a) / f32(255)
 	return
 }
 
@@ -962,7 +962,6 @@ linear_gradient :: proc(
 	p.inner_color = icol
 	p.outer_color = ocol
 
-	// fmt.eprintln("LINEAR", p)
 	return
 }
 
