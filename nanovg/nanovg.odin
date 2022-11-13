@@ -1882,9 +1882,12 @@ calculate_joins :: proc(
 	}
 }
 
+// TODO changes this
 alloc_temp_verts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
-	resize(&ctx.cache.verts, nverts)
-	return ctx.cache.verts[:nverts]
+	old := len(ctx.cache.verts)
+	resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
+	// return mem.slice_ptr(raw_data(ctx.cache.verts), nverts)
+	return ctx.cache.verts[old:old+nverts]
 	// return make([]Vertex, nverts, context.temp_allocator)
 }
 

@@ -417,7 +417,7 @@ render_create_texture :: proc(
 	gl.PixelStorei(gl.UNPACK_ALIGNMENT,1)
 	
 	when GLES2 {
-		gl.PixelStorei(gl.UNPACK_ROW_LENGTH, tex.width)
+		gl.PixelStorei(gl.UNPACK_ROW_LENGTH, i32(tex.width))
 		gl.PixelStorei(gl.UNPACK_SKIP_PIXELS, 0)
 		gl.PixelStorei(gl.UNPACK_SKIP_ROWS, 0)
 	}
@@ -616,9 +616,9 @@ render_update_texture :: proc(
 	data := data
 
 	when GLES2 {
-		gl.PixelStorei(gl.UNPACK_ROW_LENGTH, tex.width)
-		gl.PixelStorei(gl.UNPACK_SKIP_PIXELS, x)
-		gl.PixelStorei(gl.UNPACK_SKIP_ROWS, y)
+		gl.PixelStorei(gl.UNPACK_ROW_LENGTH, i32(tex.width))
+		gl.PixelStorei(gl.UNPACK_SKIP_PIXELS, i32(x))
+		gl.PixelStorei(gl.UNPACK_SKIP_ROWS, i32(y))
 	} else {
 		// No support for all of skip, need to update a whole row at a time.
 		if tex.type == .RGBA {
@@ -756,9 +756,9 @@ convert_paint :: proc(
 			}
 		} else {
 			if tex.type == .RGBA {
-				frag.texType = (.Premultiplied in tex.flags) ? 0.0 : 1.0
+				frag.tex_type = (.Premultiplied in tex.flags) ? 0.0 : 1.0
 			}	else {
-				frag.texType = 2.0
+				frag.tex_type = 2.0
 			}
 		}
 	} else {
@@ -778,8 +778,10 @@ set_uniforms :: proc(ctx: ^Context, uniform_offset: int, image: int) {
 		gl.BindBufferRange(gl.UNIFORM_BUFFER, FRAG_BINDING, ctx.frag_buf, uniform_offset, size_of(Frag_Uniforms))
 	} else {
 		frag := frag_uniform_ptr(ctx, uniform_offset)
-		gl.Uniform4fv(ctx.shader.loc[.Frag], GL_UNIFORMARRAY_SIZE, &(frag->uniformArray[0][0]))
+		gl.Uniform4fv(ctx.shader.loc[.Frag], GL_UNIFORMARRAY_SIZE, cast(^f32) frag)
 	}
+
+	check_error(ctx, "uniform4")
 
 	tex: ^Texture
 	if image != 0 {
