@@ -82,7 +82,7 @@ void main(void) {
 	if (type == 0) {			// Gradient
 		// Calculate gradient color using box gradient
 		vec2 pt = (paintMat * vec3(fpos,1.0)).xy;
-		float d = clamp((sdroundrect(pt, extent, radius) + feather*0.5) / feather, 0.0, .0);
+		float d = clamp((sdroundrect(pt, extent, radius) + feather*0.5) / feather, 0.0, 1.0);
 		vec4 color = mix(innerCol,outerCol,d);
 		// Combine alpha
 		color *= strokeAlpha * scissor;

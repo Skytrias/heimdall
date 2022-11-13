@@ -271,8 +271,6 @@ delete_texture :: proc(ctx: ^Context, id: int) -> bool {
 				gl.DeleteTextures(1, &texture.tex)
 			}
 
-			// TODO does this reset
-			// texture = {}
 			ctx.textures[i] = {}
 			return true
 		}
@@ -313,23 +311,23 @@ render_create :: proc(uptr: rawptr) -> bool {
 	ctx := cast(^Context) uptr
 
 	// just build the string at runtime
-	builder := strings.builder_make(0, 256, context.temp_allocator)
+	builder := strings.builder_make(0, 512, context.temp_allocator)
 
-	when GL2 {
-		strings.write_string(&builder, "#define NANOVG_GL2 1\n")
-	} else when GL3 {
+	// when GL2 {
+	// 	strings.write_string(&builder, "#define NANOVG_GL2 1\n")
+	// } else when GL3 {
 		strings.write_string(&builder, "#version 150 core\n#define NANOVG_GL3 1\n")
-	} else when GLES2 {
-		strings.write_string(&builder, "#version 100\n#define NANOVG_GL2 1\n")
-	} else when GLES3 {
-		strings.write_string(&builder, "#version 300 es\n#define NANOVG_GL3 1\n")
-	}
+	// } else when GLES2 {
+	// 	strings.write_string(&builder, "#version 100\n#define NANOVG_GL2 1\n")
+	// } else when GLES3 {
+	// 	strings.write_string(&builder, "#version 300 es\n#define NANOVG_GL3 1\n")
+	// }
 
-	when GL_USE_UNIFORMBUFFER {
+	// when GL_USE_UNIFORMBUFFER {
 		strings.write_string(&builder, "#define USE_UNIFORMBUFFER 1\n")
-	} else {
-		strings.write_string(&builder, "#define UNIFORMARRAY_SIZE 11\n")
-	} 
+	// } else {
+	// 	strings.write_string(&builder, "#define UNIFORMARRAY_SIZE 11\n")
+	// } 
 
 	check_error(ctx, "init")
 
@@ -365,8 +363,6 @@ render_create :: proc(uptr: rawptr) -> bool {
 	ctx.frag_size = int(size_of(Frag_Uniforms) + align - size_of(Frag_Uniforms) % align)
 	// ctx.frag_size = size_of(Frag_Uniforms)
 	ctx.dummy_tex = render_create_texture(ctx, .Alpha, 1, 1, {}, nil)
-
-	// fmt.eprintln(ctx.frag_size, size_of(Frag_Uniforms))
 
 	check_error(ctx, "create done")
 	
