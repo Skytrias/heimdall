@@ -2826,3 +2826,124 @@ text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 
 	return iter.nextx / scale
 }
+
+Text_Row :: struct {
+	start: string,
+	end: string,
+	next: string,
+	width: f32,
+	minx, maxx: f32,
+}
+
+Codepoint_Type :: enum {
+	Space,
+	Newline,
+	Char,
+	CJK,
+}
+
+text_box :: proc(
+	ctx: ^Context, 
+	x, y: f32,
+	break_row_width: f32,
+	text: string,
+) {
+	state := get_state(ctx)
+	rows: [2]Text_Row
+
+	ah := state.align_horizontal
+	av := state.align_vertical
+	// halign := state.textAlign & (NVG_ALIGN_LEFT | NVG_ALIGN_CENTER | NVG_ALIGN_RIGHT)
+	// valign := state.textAlign & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE)
+	lineh := 0
+
+	if state.font_id == -1 {
+		return
+	} 
+
+	_, _, line_height := text_metrics(ctx)
+	// state.textAlign = NVG_ALIGN_LEFT | valign
+	// TODO wtf are the alignments
+
+	// for 
+	y := y
+	// while ((nrows = nvgTextBreakLines(ctx, string, end, breakRowWidth, rows, 2))) {
+		// for (i = 0 i < nrows i++) {
+			// NVGtextRow* row = &rows[i]
+			
+			// if (haling & NVG_ALIGN_LEFT) {
+			// 	text(ctx, x, y, row.start, row.end)
+			// }	else if (haling & NVG_ALIGN_CENTER) {
+			// 	text(ctx, x + breakRowWidth*0.5f - row.width*0.5f, y, row.start, row.end)
+			// }	else if (haling & NVG_ALIGN_RIGHT) {
+			// 	text(ctx, x + breakRowWidth - row.width, y, row.start, row.end)
+			// }
+			
+		// 	y += line_height * state.line_height
+		// }
+
+		// string = rows[nrows-1].next
+	// }
+
+	state.align_horizontal = ah
+	state.align_vertical = av
+}
+
+text_metrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
+	state := get_state(ctx)
+	scale := _get_font_scale(state) * ctx.device_px_ratio
+	invscale := 1.0 / scale
+
+	if state.font_id == -1 {
+		return
+	}
+
+	fs := &ctx.fs
+	fontstash.state_set_size(fs, state.font_size*scale)
+	fontstash.state_set_spacing(fs, state.letter_spacing*scale)
+	fontstash.state_set_blur(fs, state.font_blur*scale)
+	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
+	fontstash.state_set_align_vertical(fs, state.align_vertical)
+	fontstash.state_set_font(fs, state.font_id)
+
+	return fontstash.state_vertical_metrics(fs)
+}
+
+text_bounds :: proc(
+	ctx: ^Context,
+	x, y: f32,
+	text: string,
+) -> (bounds: [4]f32) {
+	state := get_state(ctx)
+	scale := _get_font_scale(state) * ctx.device_px_ratio
+	invscale := 1.0 / scale
+
+	if state.font_id == -1 {
+		return {}
+	}
+
+	fs := &ctx.fs
+	fontstash.state_set_size(fs, state.font_size*scale)
+	fontstash.state_set_spacing(fs, state.letter_spacing*scale)
+	fontstash.state_set_blur(fs, state.font_blur*scale)
+	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
+	fontstash.state_set_align_vertical(fs, state.align_vertical)
+	fontstash.state_set_font(fs, state.font_id)
+
+	width := fontstash.text_bounds(fs, text, x * scale, y * scale, &bounds)
+	
+	// Use line bounds for height.
+	bounds[1], bounds[3] = fontstash.line_bounds(fs, y*scale)
+	bounds[0] *= invscale
+	bounds[1] *= invscale
+	bounds[2] *= invscale
+	bounds[3] *= invscale
+
+	return width * invscale
+}
+
+text_break_lines :: proc(
+
+) {
+		
+}
