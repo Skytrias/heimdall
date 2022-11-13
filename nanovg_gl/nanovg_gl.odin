@@ -705,14 +705,12 @@ convert_paint :: proc(
 	frag.outer_color = premul_color(paint.outer_color)
 
 	if scissor.extent[0] < -0.5 || scissor.extent[1] < -0.5 {
-		// fmt.eprintln("---------")
 		frag.scissor_mat = {}
 		frag.scissor_ext[0] = 1.0
 		frag.scissor_ext[1] = 1.0
 		frag.scissor_scale[0] = 1.0
 		frag.scissor_scale[1] = 1.0
 	} else {
-		// fmt.eprintln("+++")
 		nvg.transform_inverse(&invxform, scissor.xform)
 		xform_to_mat3x4(&frag.scissor_mat, invxform)
 		frag.scissor_ext[0] = scissor.extent[0]
@@ -769,7 +767,6 @@ convert_paint :: proc(
 		nvg.transform_inverse(&invxform, paint.xform)
 	}
 
-	// fmt.eprintln("CALLED", frag.type, int(frag.type))
 	xform_to_mat3x4(&frag.paint_mat, invxform)
 
 	return true
@@ -938,43 +935,6 @@ BLEND_FACTOR_TABLE :: [nvg.Blend_Factor]u32 {
 	.SRC_ALPHA_SATURATE = gl.SRC_ALPHA_SATURATE,
 }
 
-// convert_blend_func_factor :: proc(factor: i32) -> u32 {
-// 	if factor == i32(nvg.Blend_Factor.ZERO) {
-// 		return gl.ZERO
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.ONE) {
-// 		return gl.ONE
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.SRC_COLOR) {
-// 		return gl.SRC_COLOR
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.ONE_MINUS_SRC_COLOR) {
-// 		return gl.ONE_MINUS_SRC_COLOR
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.DST_COLOR) {
-// 		return gl.DST_COLOR
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.ONE_MINUS_DST_COLOR) {
-// 		return gl.ONE_MINUS_DST_COLOR
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.SRC_ALPHA) {
-// 		return gl.SRC_ALPHA
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.ONE_MINUS_SRC_ALPHA) {
-// 		return gl.ONE_MINUS_SRC_ALPHA
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.DST_ALPHA) {
-// 		return gl.DST_ALPHA
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.ONE_MINUS_DST_ALPHA) {
-// 		return gl.ONE_MINUS_DST_ALPHA
-// 	}
-// 	if factor == i32(nvg.Blend_Factor.SRC_ALPHA_SATURATE) {
-// 		return gl.SRC_ALPHA_SATURATE
-// 	}
-// 	return gl.INVALID_ENUM
-// }
-
 blend_composite_operation :: proc(op: nvg.Composite_Operation_State) -> Blend {
 	table := BLEND_FACTOR_TABLE
 	blend := Blend {
@@ -983,26 +943,6 @@ blend_composite_operation :: proc(op: nvg.Composite_Operation_State) -> Blend {
 		table[op.src_alpha],
 		table[op.dst_alpha],
 	}
-
-	// blend := Blend {
-	// 	convert_blend_func_factor(i32(op.src_RGB)),
-	// 	convert_blend_func_factor(i32(op.dst_RGB)),
-	// 	convert_blend_func_factor(i32(op.src_alpha)),
-	// 	convert_blend_func_factor(i32(op.dst_alpha)),
-	// }
-
-	// if blend.src_RGB == gl.INVALID_ENUM ||
-	// 	blend.dst_RGB == gl.INVALID_ENUM ||
-	// 	blend.src_alpha == gl.INVALID_ENUM ||
-	// 	blend.dst_alpha == gl.INVALID_ENUM {
-	// 	blend.src_RGB = gl.ONE
-	// 	blend.dst_RGB = gl.ONE_MINUS_SRC_ALPHA
-	// 	blend.src_alpha = gl.ONE
-	// 	blend.dst_alpha = gl.ONE_MINUS_SRC_ALPHA
-	// 	fmt.eprintln("FALLBACK COMP")
-	// }
-
-	// TODO check for invalidity
 	return blend
 }
 

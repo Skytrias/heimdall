@@ -6,6 +6,10 @@ import "core:math"
 import "core:fmt"
 import stbi "vendor:stb/image"
 
+INIT_FONTIMAGE_SIZE :: 512
+MAX_FONTIMAGE_SIZE :: 2048
+MAX_FONTIMAGES :: 4
+
 MAX_STATES :: 32
 INIT_COMMANDS_SIZE :: 256
 INIT_POINTS_SIZE :: 128
@@ -176,6 +180,10 @@ Context :: struct {
 	fringe_width: f32,
 	device_px_ratio: f32,
 
+	// font
+	font_images: [MAX_FONTIMAGES]int,
+	font_image_idx: int,
+
 	// stats
 	draw_call_count: int,
 	fill_tri_count: int,
@@ -272,6 +280,7 @@ create_internal :: proc(params: Params) -> (ctx: ^Context) {
 
 	save(ctx)
 	reset(ctx)
+	set_device_pixel_ratio(ctx, 1)
 
 	assert(ctx.params.render_create != nil)
 	if !ctx.params.render_create(ctx.params.user_ptr) {
@@ -279,12 +288,23 @@ create_internal :: proc(params: Params) -> (ctx: ^Context) {
 		panic("Nanovg - create_internal failed")
 	}
 
-	set_device_pixel_ratio(ctx, 1)
+	w := INIT_FONTIMAGE_SIZE
+	h := INIT_FONTIMAGE_SIZE
+	assert(ctx.params.render_create_texture != nil)
+	ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, nil)
+	ctx.font_image_idx = 0
+
 	return
 }
 
 delete_internal :: proc(ctx: ^Context) {
 	path_cache_destroy(ctx.cache)
+
+	for image in &ctx.font_images {
+		if image != 0 {
+			delete_image(ctx, image)
+		}
+	}
 
 	if ctx.params.render_delete != nil {
 		ctx.params.render_delete(ctx.params.user_ptr)
@@ -335,7 +355,37 @@ end_frame :: proc(ctx: ^Context) {
 	assert(ctx.params.render_flush != nil)
 	ctx.params.render_flush(ctx.params.user_ptr)	
 
-	// TODO font imaging
+	// delete textures with invalid size
+	if ctx.font_image_idx != 0 {
+		font_image := ctx.font_images[ctx.font_image_idx]
+		ctx.font_images[ctx.font_image_idx] = 0
+
+		if font_image == 0 {
+			return
+		}
+
+		iw, ih := image_size(ctx, font_image)
+		j: int
+		for i in 0..<ctx.font_image_idx {
+			if ctx.font_images[i] != 0 {
+				image := ctx.font_images[i]
+				ctx.font_images[i] = 0
+				nw, nh := image_size(ctx, image)
+
+				if nw < iw || nh < ih {
+					delete_image(ctx, image)
+				} else {
+					ctx.font_images[j] = image
+					j += 1
+				}
+			}
+		}
+
+		// make current font image to first
+		ctx.font_images[j] = ctx.font_images[0]
+		ctx.font_images[0] = font_image
+		ctx.font_image_idx = 0
+	}
 }
 
 ///////////////////////////////////////////////////////////
@@ -886,6 +936,7 @@ linear_gradient :: proc(
 	p.inner_color = icol
 	p.outer_color = ocol
 
+	// fmt.eprintln("LINEAR", p)
 	return
 }
 
@@ -1092,7 +1143,7 @@ composite_operation_state :: proc(op: Composite_Operation) -> (res: Composite_Op
 	factors := table[op]
 	res.src_RGB = factors.x
 	res.dst_RGB = factors.y
-	res.src_alpha = factors.y
+	res.src_alpha = factors.x
 	res.dst_alpha = factors.y
 	return
 }
