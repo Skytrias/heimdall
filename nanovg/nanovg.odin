@@ -358,6 +358,63 @@ RGBA :: proc(r, g, b, a: u8) -> (res: Color) {
 	return
 }
 
+// Linearly interpolates from color c0 to c1, and returns resulting color value.
+lerp_rgba :: proc(c0, c1: Color, u: f32) -> (cint: Color) {
+	u := clamp(u, 0.0, 1.0)
+	oneminu := 1.0 - u
+	for i in 0..<4 {
+		cint[i] = c0[i] * oneminu + c1[i] * u
+	}
+
+	return
+}
+
+// Returns color value specified by hue, saturation and lightness.
+// HSL values are all in range [0..1], alpha will be set to 255.
+HSL :: proc(h, s, l: f32) -> Color {
+	return HSLA(h,s,l,255)
+}
+
+// Returns color value specified by hue, saturation and lightness and alpha.
+// HSL values are all in range [0..1], alpha in range [0..255]
+HSLA :: proc(h, s, l: f32, a: u8) -> (col: Color) {
+	hue :: proc(h, m1, m2: f32) -> f32 {
+		h := h
+
+		if h < 0 {
+			h += 1
+		}
+		
+		if h > 1 {
+			h -= 1
+		} 
+		
+		if h < 1.0 / 6.0 {
+			return m1 + (m2 - m1) * h * 6.0
+		} else if h < 3.0 / 6.0 {
+			return m2
+		} else if h < 4.0 / 6.0 {
+			return m1 + (m2 - m1) * (2.0 / 3.0 - h) * 6.0
+		}
+
+		return m1
+	}
+
+	h := math.mod(h, 1.0)
+	if h < 0.0 {
+		h += 1.0
+	} 
+	s := clamp(s, 0.0, 1.0)
+	l := clamp(l, 0.0, 1.0)
+	m2 := l <= 0.5 ? (l * (1 + s)) : (l + s - l * s)
+	m1 := 2 * l - m2
+	col.r = clamp(hue(h + 1.0/3.0, m1, m2), 0.0, 1.0)
+	col.g = clamp(hue(h, m1, m2), 0.0, 1.0)
+	col.b = clamp(hue(h - 1.0/3.0, m1, m2), 0.0, 1.0)
+	col.a = f32(a) / 255.0
+	return
+}
+
 ///////////////////////////////////////////////////////////
 // TRANSFORMS
 //
@@ -947,21 +1004,6 @@ scissor :: proc(
 	state.scissor.extent[1] = h * 0.5
 }
 
-_isect_rects :: proc(
-	dst: ^Rect,
-	ax, ay, aw, ah: f32,
-	bx, by, bw, bh: f32,
-) {
-	minx := max(ax, bx)
-	miny := max(ay, by)
-	maxx := min(ax + aw, bx + bw)
-	maxy := min(ay + ah, by + bh)
-	dst[0] = minx
-	dst[1] = miny
-	dst[2] = max(0.0, maxx - minx)
-	dst[3] = max(0.0, maxy - miny)
-}
-
 /*
 	Intersects current scissor rectangle with the specified rectangle.
 	The scissor rectangle is transformed by the current transform.
@@ -974,6 +1016,21 @@ intersect_scissor :: proc(
 	ctx: ^Context,
 	x, y, w, h: f32,
 ) {
+	_isect_rects :: proc(
+		dst: ^Rect,
+		ax, ay, aw, ah: f32,
+		bx, by, bw, bh: f32,
+	) {
+		minx := max(ax, bx)
+		miny := max(ay, by)
+		maxx := min(ax + aw, bx + bw)
+		maxy := min(ay + ah, by + bh)
+		dst[0] = minx
+		dst[1] = miny
+		dst[2] = max(0.0, maxx - minx)
+		dst[3] = max(0.0, maxy - miny)
+	}
+
 	state := get_state(ctx)
 	pxform: Matrix
 	invxorm: Matrix
@@ -1155,10 +1212,15 @@ path_cache_clear :: proc(ctx: ^Context) {
 	clear(&ctx.cache.paths)
 }
 
-last_path :: proc(ctx: ^Context, loc := #caller_location) -> ^Path {
-	idx := len(ctx.cache.paths) - 1
-	runtime.bounds_check_error_loc(loc, idx, len(ctx.cache.paths))
-	return &ctx.cache.paths[idx]
+last_path :: proc(ctx: ^Context) -> ^Path {
+	if len(ctx.cache.paths) > 0 {
+		return &ctx.cache.paths[len(ctx.cache.paths) - 1]
+	}
+
+	return nil
+	// idx := len(ctx.cache.paths) - 1
+	// runtime.bounds_check_error_loc(loc, idx, len(ctx.cache.paths))
+	// return &ctx.cache.paths[idx]
 }
 
 add_path :: proc(ctx: ^Context) {
@@ -1168,14 +1230,20 @@ add_path :: proc(ctx: ^Context) {
 	})
 }
 
-last_point :: proc(ctx: ^Context, loc := #caller_location) -> ^Point {
-	idx := len(ctx.cache.points) - 1
-	runtime.bounds_check_error_loc(loc, idx, len(ctx.cache.points))
-	return &ctx.cache.points[idx]
+last_point :: proc(ctx: ^Context) -> ^Point {
+	if len(ctx.cache.paths) > 0 {
+		return &ctx.cache.points[len(ctx.cache.points) - 1]
+	}
+
+	return nil
 }
 
 add_point :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
 	path := last_path(ctx)
+
+	if path == nil {
+		return
+	}
 
 	if path.count > 0 && len(ctx.cache.points) > 0 {
 		pt := last_point(ctx)
@@ -1196,11 +1264,17 @@ add_point :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
 
 path_set_close :: proc(ctx: ^Context) {
 	path := last_path(ctx)
+	if path == nil {
+		return
+	}
 	path.closed = true
 }
 
 path_set_winding :: proc(ctx: ^Context, winding: Winding) {
 	path := last_path(ctx)
+	if path == nil {
+		return
+	}
 	path.winding = winding
 }
 
@@ -1376,7 +1450,7 @@ flatten_paths :: proc(ctx: ^Context) {
 		}
 
 		// enforce winding
-		if (path.count > 2) {
+		if path.count > 2 {
 			area := poly_area(pts[:path.count])
 			
 			if path.winding == .Counter_Clockwise && area < 0 {
@@ -1745,7 +1819,7 @@ calculate_joins :: proc(
 
 			// TODO check this out
 			// if (p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0 {
-			if (.Bevel in p1.flags) | (.Inner_Bevel in p1.flags) {
+			if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
 				path.nbevel += 1
 			}
 
@@ -1788,8 +1862,6 @@ expand_stroke :: proc(
 
 	calculate_joins(ctx, w, line_join, miter_limit)
 
-	// TODO loop could be reversed?
-
 	// Calculate max vertex usage.
 	cverts := 0
 	for path in &cache.paths {
@@ -1812,11 +1884,9 @@ expand_stroke :: proc(
 		}
 	}
 
-	// TODO is this actually temp?
 	verts := alloc_temp_verts(ctx, cverts)
 	dst_index: int
 
-	fmt.eprintln("STROKE")
 	for i in 0..<len(cache.paths) {
 		path := &cache.paths[i]
 		pts := cache.points[path.first:]
@@ -1831,7 +1901,6 @@ expand_stroke :: proc(
 		loop := path.closed
 		dst := verts[dst_index:]
 		dst_start_length := len(dst)
-		fmt.eprintln("dst length", len(dst))
 
 		if loop {
 			// Looping
@@ -1881,9 +1950,10 @@ expand_stroke :: proc(
 		}
 
 		if loop {
+			// NOTE use old vertices to loopback!
 			// Loop it
-			vset(&dst, verts[0].x, verts[0].y, u0, 1)
-			vset(&dst, verts[1].x, verts[1].y, u1, 1)
+			vset(&dst, verts[dst_index + 0].x, verts[dst_index + 0].y, u0, 1)
+			vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, u1, 1)
 		} else {
 			// Add cap
 			dx = p1.x - p0.x;
@@ -1899,12 +1969,8 @@ expand_stroke :: proc(
 			}
 		}
 
-		// TODO this is the difficult part
-		// path.nstroke = (int)(dst - verts)
-
 		// count of vertices pushed
 		dst_diff := dst_start_length - len(dst) 
-		fmt.eprintln("dst length NOW", len(dst), "diff", dst_diff)
 		// set stroke to the new region
 		path.stroke = verts[dst_index:dst_index + dst_diff]
 		// move index for next iteration
@@ -2408,7 +2474,7 @@ stroke :: proc(ctx: ^Context) {
 }
 
 debug_dump_path_cache :: proc(ctx: ^Context) {
-	fmt.printf("Dumping %d cached paths\n", len(ctx.cache.paths))
+	fmt.printf("~~~~~~~~~~~~~Dumping %d cached paths\n", len(ctx.cache.paths))
 	
 	for path, i in &ctx.cache.paths {
 		fmt.printf(" - Path %d\n", i)
