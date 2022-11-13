@@ -2042,7 +2042,7 @@ expand_fill :: proc(
 ) -> bool {
 	cache := &ctx.cache
 	aa := ctx.fringe_width
-	fringe := w > 0
+	fringe := w > 0.0
 	calculate_joins(ctx, w, line_join, miter_limit)
 
 	// Calculate max vertex usage.

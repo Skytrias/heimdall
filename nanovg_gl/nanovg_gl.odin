@@ -92,20 +92,41 @@ Path :: struct {
 	stroke_count: int,
 }
 
-Frag_Uniforms :: struct #packed {
-	scissor_mat: [12]f32, // matrices are actually 3 vec4s
-	paint_mat: [12]f32,
-	inner_color: Color,
-	outer_color: Color,
-	scissor_ext: [2]f32,
-	scissor_scale: [2]f32,
-	extent: [2]f32,
-	radius: f32,
-	feather: f32,
-	stroke_mult: f32,
-	stroke_thr: f32,
-	tex_type: i32,
-	type: Shader_Type,
+when GL2_IMPLEMENTATION {
+	Frag_Uniforms :: struct #raw_union {
+		using _: struct {
+			scissor_mat: [12]f32, // matrices are actually 3 vec4s
+			paint_mat: [12]f32,
+			inner_color: Color,
+			outer_color: Color,
+			scissor_ext: [2]f32,
+			scissor_scale: [2]f32,
+			extent: [2]f32,
+			radius: f32,
+			feather: f32,
+			stroke_mult: f32,
+			stroke_thr: f32,
+			tex_type: i32,
+			type: Shader_Type,
+		},
+		uniform_array: [GL_UNIFORMARRAY_SIZE][4]f32,
+	}
+} else {
+	Frag_Uniforms :: struct #packed {
+		scissor_mat: [12]f32, // matrices are actually 3 vec4s
+		paint_mat: [12]f32,
+		inner_color: Color,
+		outer_color: Color,
+		scissor_ext: [2]f32,
+		scissor_scale: [2]f32,
+		extent: [2]f32,
+		radius: f32,
+		feather: f32,
+		stroke_mult: f32,
+		stroke_thr: f32,
+		tex_type: i32,
+		type: Shader_Type,
+	}
 }
 
 // TODO maybe find a better way to do this
@@ -313,21 +334,21 @@ render_create :: proc(uptr: rawptr) -> bool {
 	// just build the string at runtime
 	builder := strings.builder_make(0, 512, context.temp_allocator)
 
-	// when GL2 {
-	// 	strings.write_string(&builder, "#define NANOVG_GL2 1\n")
-	// } else when GL3 {
+	when GL2 {
+		strings.write_string(&builder, "#define NANOVG_GL2 1\n")
+	} else when GL3 {
 		strings.write_string(&builder, "#version 150 core\n#define NANOVG_GL3 1\n")
-	// } else when GLES2 {
-	// 	strings.write_string(&builder, "#version 100\n#define NANOVG_GL2 1\n")
-	// } else when GLES3 {
-	// 	strings.write_string(&builder, "#version 300 es\n#define NANOVG_GL3 1\n")
-	// }
+	} else when GLES2 {
+		strings.write_string(&builder, "#version 100\n#define NANOVG_GL2 1\n")
+	} else when GLES3 {
+		strings.write_string(&builder, "#version 300 es\n#define NANOVG_GL3 1\n")
+	}
 
-	// when GL_USE_UNIFORMBUFFER {
+	when GL_USE_UNIFORMBUFFER {
 		strings.write_string(&builder, "#define USE_UNIFORMBUFFER 1\n")
-	// } else {
-	// 	strings.write_string(&builder, "#define UNIFORMARRAY_SIZE 11\n")
-	// } 
+	} else {
+		strings.write_string(&builder, "#define UNIFORMARRAY_SIZE 11\n")
+	} 
 
 	check_error(ctx, "init")
 
