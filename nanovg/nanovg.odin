@@ -151,6 +151,19 @@ Path :: struct {
 	convex: bool,
 }
 
+Align_Horizontal :: enum {
+	Left,
+	Center,
+	Right,
+}
+
+Align_Vertical :: enum {
+	Top,
+	Middle,
+	Bottom,
+	Baseline, // TODO make this default at 0?
+}
+
 State :: struct {
 	composite_operation: Composite_Operation_State,
 	shape_anti_alias: bool,
@@ -164,8 +177,14 @@ State :: struct {
 	xform: Matrix,
 	scissor: Scissor,
 
-	// // text
-	// letter_spacing: int,
+	// font state
+	font_size: f32,
+	letter_spacing: f32,
+	line_height: f32,
+	font_blur: f32,
+	align_horizontal: Align_Horizontal,
+	align_vertical: Align_Vertical,
+	font_id: int,
 }
 
 Context :: struct {
@@ -648,7 +667,14 @@ reset :: proc(ctx: ^Context) {
 	state.scissor.extent[0] = -1
 	state.scissor.extent[1] = -1
 
-	// TODO font settings
+	// font settings
+	state.font_size = 16
+	state.letter_spacing = 0
+	state.line_height = 1
+	state.font_blur = 0
+	state.align_horizontal = .Left
+	state.align_vertical = .Baseline
+	state.font_id = 0
 }
 
 ///////////////////////////////////////////////////////////
@@ -2226,132 +2252,138 @@ quad_to :: proc(ctx: ^Context, cx, cy, x, y: f32) {
 }
 
 // Adds an arc segment at the corner defined by the last path point, and two specified points.
-// arc_to :: proc(
-// 	ctx: ^Context,
-// 	x1, y1: f32,
-// 	x2, y2: f32,
-// 	radius: f32,
-// ) {
-// 	if len(ctx.commands) == 0 {
-// 		return;
-// 	}
+arc_to :: proc(
+	ctx: ^Context,
+	x1, y1: f32,
+	x2, y2: f32,
+	radius: f32,
+) {
+	if len(ctx.commands) == 0 {
+		return;
+	}
 
-// 	x0 := ctx.command_x
-// 	y0 := ctx.command_y
-// 	// Handle degenerate cases.
-// 	if pt_equals(x0,y0, x1,y1, ctx.dist_tol) ||
-// 		pt_equals(x1,y1, x2,y2, ctx.dist_tol) ||
-// 		dist_pt_seg(x1,y1, x0,y0, x2,y2) < ctx.dist_tol*ctx.dist_tol ||
-// 		radius < ctx.dist_tol {
-// 		line_to(ctx, x1, y1)
-// 		return
-// 	}
+	x0 := ctx.command_x
+	y0 := ctx.command_y
+	// Handle degenerate cases.
+	if pt_equals(x0,y0, x1,y1, ctx.dist_tol) ||
+		pt_equals(x1,y1, x2,y2, ctx.dist_tol) ||
+		dist_pt_seg(x1,y1, x0,y0, x2,y2) < ctx.dist_tol*ctx.dist_tol ||
+		radius < ctx.dist_tol {
+		line_to(ctx, x1, y1)
+		return
+	}
 
-// 	// Calculate tangential circle to lines (x0,y0)-(x1,y1) and (x1,y1)-(x2,y2).
-// 	dx0 := x0-x1
-// 	dy0 := y0-y1
-// 	dx1 := x2-x1
-// 	dy1 := y2-y1
-// 	normalize(&dx0,&dy0)
-// 	normalize(&dx1,&dy1)
-// 	a := math.acos(dx0*dx1 + dy0*dy1)
-// 	d := radius / math.tan(a / 2.0)
+	// Calculate tangential circle to lines (x0,y0)-(x1,y1) and (x1,y1)-(x2,y2).
+	dx0 := x0-x1
+	dy0 := y0-y1
+	dx1 := x2-x1
+	dy1 := y2-y1
+	normalize(&dx0,&dy0)
+	normalize(&dx1,&dy1)
+	a := math.acos(dx0*dx1 + dy0*dy1)
+	d := radius / math.tan(a / 2.0)
+	
+	if d > 10000 {
+		line_to(ctx, x1, y1)
+		return
+	}
 
-// //	printf("a=%f° d=%f\n", a/NVG_PI*180.0f, d);
+	a0, a1, cx, cy: f32
+	direction: Winding
 
-// 	if d > 10000 {
-// 		line_to(ctx, x1, y1)
-// 		return
-// 	}
+	if cross(dx0,dy0, dx1,dy1) > 0.0 {
+		cx = x1 + dx0*d + dy0*radius
+		cy = y1 + dy0*d + -dx0*radius
+		a0 = math.atan2(dx0, -dy0)
+		a1 = math.atan2(-dx1, dy1)
+		direction = .Clockwise
+	} else {
+		cx = x1 + dx0*d + -dy0*radius
+		cy = y1 + dy0*d + dx0*radius
+		a0 = math.atan2(-dx0, dy0)
+		a1 = math.atan2(dx1, -dy1)
+		direction = .Counter_Clockwise
+	}
 
-// 	a0, a1, cx, cy: f32
-// 	direction: Winding
-
-// 	if cross(dx0,dy0, dx1,dy1) > 0.0 {
-// 		cx = x1 + dx0*d + dy0*radius
-// 		cy = y1 + dy0*d + -dx0*radius
-// 		a0 = math.atan2(dx0, -dy0)
-// 		a1 = math.atan2(-dx1, dy1)
-// 		direction = .Clockwise
-// //		printf("CW c=(%f, %f) a0=%f° a1=%f°\n", cx, cy, a0/NVG_PI*180.0f, a1/NVG_PI*180.0f);
-// 	} else {
-// 		cx = x1 + dx0*d + -dy0*radius
-// 		cy = y1 + dy0*d + dx0*radius
-// 		a0 = math.atan2(-dx0, dy0)
-// 		a1 = math.atan2(dx1, -dy1)
-// 		direction = .Counter_Clockwise
-// //		printf("CCW c=(%f, %f) a0=%f° a1=%f°\n", cx, cy, a0/NVG_PI*180.0f, a1/NVG_PI*180.0f);
-// 	}
-
-// 	arc(ctx, cx, cy, radius, a0, a1, direction)
-// }
+	arc(ctx, cx, cy, radius, a0, a1, direction)
+}
 
 // Creates new circle arc shaped sub-path. The arc center is at cx,cy, the arc radius is r,
 // and the arc is drawn from angle a0 to a1, and swept in direction dir (NVG_CCW, or NVG_CW).
 // Angles are specified in radians.
-// arc :: proc(
-// 	float a = 0, da = 0, hda = 0, kappa = 0;
-// 	float dx = 0, dy = 0, x = 0, y = 0, tanx = 0, tany = 0;
-// 	float px = 0, py = 0, ptanx = 0, ptany = 0;
-// 	float vals[3 + 5*7 + 100];
-// 	int i, ndivs, nvals;
-// 	int move = ctx->ncommands > 0 ? NVG_LINETO : NVG_MOVETO;
+arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
+	move: Command = .Line_To if len(ctx.commands) > 0 else .Move_To
 
-// 	// Clamp angles
-// 	da = a1 - a0;
-// 	if (dir == NVG_CW) {
-// 		if (nvg__absf(da) >= NVG_PI*2) {
-// 			da = NVG_PI*2;
-// 		} else {
-// 			while (da < 0.0f) da += NVG_PI*2;
-// 		}
-// 	} else {
-// 		if (nvg__absf(da) >= NVG_PI*2) {
-// 			da = -NVG_PI*2;
-// 		} else {
-// 			while (da > 0.0f) da -= NVG_PI*2;
-// 		}
-// 	}
+	// Clamp angles
+	da := a1 - a0
+	if dir == .Clockwise {
+		if abs(da) >= math.PI*2 {
+			da = math.PI*2
+		} else {
+			for da < 0.0 {
+				da += math.PI*2
+			}
+		}
+	} else {
+		if abs(da) >= math.PI*2 {
+			da = -math.PI*2;
+		} else {
+			for da > 0.0 {
+				da -= math.PI*2
+			} 
+		}
+	}
 
-// 	// Split arc into max 90 degree segments.
-// 	ndivs = nvg__maxi(1, nvg__mini((int)(nvg__absf(da) / (NVG_PI*0.5f) + 0.5f), 5));
-// 	hda = (da / (float)ndivs) / 2.0f;
-// 	kappa = nvg__absf(4.0f / 3.0f * (1.0f - nvg__cosf(hda)) / nvg__sinf(hda));
+	// Split arc into max 90 degree segments.
+	ndivs := max(1, min((int)(abs(da) / (math.PI*0.5) + 0.5), 5))
+	hda := (da / f32(ndivs)) / 2.0
+	kappa := abs(4.0 / 3.0 * (1.0 - math.cos(hda)) / math.sin(hda))
 
-// 	if (dir == NVG_CCW)
-// 		kappa = -kappa;
+	if dir == .Counter_Clockwise {
+		kappa = -kappa
+	}
 
-// 	nvals = 0;
-// 	for (i = 0; i <= ndivs; i++) {
-// 		a = a0 + da * (i/(float)ndivs);
-// 		dx = nvg__cosf(a);
-// 		dy = nvg__sinf(a);
-// 		x = cx + dx*r;
-// 		y = cy + dy*r;
-// 		tanx = -dy*r*kappa;
-// 		tany = dx*r*kappa;
+	set :: proc(values: ^[]f32, to: f32) {
+		values[0] = to
+		values^ = values[1:]
+	}
 
-// 		if (i == 0) {
-// 			vals[nvals++] = (float)move;
-// 			vals[nvals++] = x;
-// 			vals[nvals++] = y;
-// 		} else {
-// 			vals[nvals++] = NVG_.Bezier_To;
-// 			vals[nvals++] = px+ptanx;
-// 			vals[nvals++] = py+ptany;
-// 			vals[nvals++] = x-tanx;
-// 			vals[nvals++] = y-tany;
-// 			vals[nvals++] = x;
-// 			vals[nvals++] = y;
-// 		}
-// 		px = x;
-// 		py = y;
-// 		ptanx = tanx;
-// 		ptany = tany;
-// 	}
+	values := make([]f32, 3 + 5 * 7 + 100)
+	defer delete(values)
+	values_origin := values[:]
+	
+	px, py, ptanx, ptany: f32
+	for i in 0..<ndivs {
+		a := a0 + da * f32(i) / f32(ndivs)
+		dx := math.cos(a)
+		dy := math.sin(a)
+		x := cx + dx*r
+		y := cy + dy*r
+		tanx := -dy*r*kappa
+		tany := dx*r*kappa
 
-// 	nvg__appendCommands(ctx, vals, nvals);
-// )
+		if i == 0 {
+			set(&values, cmdf(move))
+			set(&values, x)
+			set(&values, y)
+		} else {
+			set(&values, cmdf(.Bezier_To))
+			set(&values, px + ptanx)
+			set(&values, py + ptany)
+			set(&values, x-tanx)
+			set(&values, y-tany)
+			set(&values, x)
+			set(&values, y)
+		}
+		px = x
+		py = y
+		ptanx = tanx
+		ptany = tany
+	}
+
+	// stored internally
+	append_commands(ctx, values_origin)
+}
 
 // Closes current sub-path with a line segment.
 close_path :: proc(ctx: ^Context) {
@@ -2544,3 +2576,4 @@ debug_dump_path_cache :: proc(ctx: ^Context) {
 		}
 	}
 }
+
