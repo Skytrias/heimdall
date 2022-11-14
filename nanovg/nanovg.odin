@@ -1524,10 +1524,8 @@ __flattenPaths :: proc(ctx: ^Context) {
 		p0 := &pts[path.count-1]
 		p1 := &pts[0]
 		if __ptEquals(p0.x,p0.y, p1.x,p1.y, ctx.dist_tol) {
-			fmt.eprintln("~~~", path.count)
 			path.count -= 1
 			p0 = &pts[path.count - 1]
-			// p0 = mem.ptr_offset(&pts[0], path.count - 1)
 			path.closed = true
 		}
 
@@ -2630,11 +2628,11 @@ DebugDumpPathCache :: proc(ctx: ^Context) {
 ///////////////////////////////////////////////////////////
 
 CreateFont :: proc(ctx: ^Context, name, filename: string) -> int {
-	return fontstash.font_push_file(&ctx.fs, name, filename)
+	return fontstash.AddFontPath(&ctx.fs, name, filename)
 }
 
 CreateFontMem :: proc(ctx: ^Context, name: string, slice: []byte) -> int {
-	return fontstash.font_push_slice(&ctx.fs, name, slice)
+	return fontstash.AddFontMem(&ctx.fs, name, slice)
 }
 
 FindFont :: proc(ctx: ^Context, name: string) -> int {
@@ -2642,7 +2640,31 @@ FindFont :: proc(ctx: ^Context, name: string) -> int {
 		return -1
 	}
 
-	return fontstash.font_find_by_name(&ctx.fs, name)
+	return fontstash.GetFontByName(&ctx.fs, name)
+}
+
+AddFallbackFontId :: proc(ctx: ^Context, base_font, fallback_font: int) -> bool {
+	if base_font == -1 || fallback_font == -1 {
+		return false
+	}
+
+	return fontstash.AddFallbackFont(&ctx.fs, base_font, fallback_font)
+}
+
+AddFallbackFont :: proc(ctx: ^Context, base_font: string, fallback_font: string) -> bool {
+	return AddFallbackFontId(
+		ctx,
+		FindFont(ctx, base_font),
+		FindFont(ctx, fallback_font),
+	)
+}
+
+ResetFallbackFontsId :: proc(ctx: ^Context, base_font: int) {
+	fontstash.ResetFallbackFont(&ctx.fs, base_font)
+}
+
+ResetFallbackFonts :: proc(ctx: ^Context, base_font: string) {
+	fontstash.ResetFallbackFont(&ctx.fs, FindFont(ctx, base_font))
 }
 
 FontSize :: proc(ctx: ^Context, size: f32) {
@@ -2683,7 +2705,7 @@ TextAlign :: proc(ctx: ^Context, ah: Align_Horizontal, av: Align_Vertical) {
 
 FontFace :: proc(ctx: ^Context, font: string) {
 	state := __getState(ctx)
-	state.font_id = fontstash.font_find_by_name(&ctx.fs, font)
+	state.font_id = fontstash.GetFontByName(&ctx.fs, font)
 }
 
 __quantize :: proc(a, d: f32) -> f32 {
@@ -2698,7 +2720,7 @@ __flushTextTexture :: proc(ctx: ^Context) {
 	dirty: [4]f32
 	assert(ctx.params.render_update_texture != nil)
 
-	if fontstash.validate_texture(&ctx.fs, &dirty) {
+	if fontstash.ValidateTexture(&ctx.fs, &dirty) {
 		font_image := ctx.font_images[ctx.font_image_idx]
 		
 		// Update texture
@@ -2742,7 +2764,7 @@ __allocTextAtlas :: proc(ctx: ^Context) -> bool {
 	}
 
 	ctx.font_image_idx += 1
-	fontstash.reset_atlas(&ctx.fs, iw, ih)
+	fontstash.ResetAtlas(&ctx.fs, iw, ih)
 
 	return true;
 }
@@ -2785,22 +2807,22 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	}
 
 	fs := &ctx.fs
-	fontstash.state_set_size(fs, state.font_size * scale)
-	fontstash.state_set_spacing(fs, state.letter_spacing * scale)
-	fontstash.state_set_blur(fs, state.font_blur * scale)
-	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
-	fontstash.state_set_align_vertical(fs, state.align_vertical)
-	fontstash.state_set_font(fs, state.font_id)
+	fontstash.SetSize(fs, state.font_size * scale)
+	fontstash.SetSpacing(fs, state.letter_spacing * scale)
+	fontstash.SetBlur(fs, state.font_blur * scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
 
 	cverts := max(2, len(text)) * 6 // conservative estimate.
 	verts := __allocTempVerts(ctx, cverts)
 	nverts: int
 
 	// TODO add FONS_GLYPH_BITMAP_REQUIRED?
-	iter := fontstash.text_iter_init(fs, text, x * scale, y * scale)
+	iter := fontstash.TextIterInit(fs, text, x * scale, y * scale)
 	prev_iter := iter
 	q: fontstash.Quad
-	for fontstash.text_iter_step(&ctx.fs, &iter, &q) {
+	for fontstash.TextIterNext(&ctx.fs, &iter, &q) {
 		c: [4 * 2]f32
 		
 		if iter.previous_glyph_index == -1 { // can not retrieve glyph?
@@ -2814,7 +2836,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 			}
 
 			iter = prev_iter
-			fontstash.text_iter_step(fs, &iter, &q) // try again
+			fontstash.TextIterNext(fs, &iter, &q) // try again
 			
 			if iter.previous_glyph_index == -1 {
 				// still can not find glyph?
@@ -2868,21 +2890,22 @@ TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 	}
 
 	fs := &ctx.fs
-	fontstash.state_set_size(fs, state.font_size*scale)
-	fontstash.state_set_spacing(fs, state.letter_spacing*scale)
-	fontstash.state_set_blur(fs, state.font_blur*scale)
-	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
-	fontstash.state_set_align_vertical(fs, state.align_vertical)
-	fontstash.state_set_font(fs, state.font_id)
+	fontstash.SetSize(fs, state.font_size*scale)
+	fontstash.SetSpacing(fs, state.letter_spacing*scale)
+	fontstash.SetBlur(fs, state.font_blur*scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
 
-	return fontstash.state_vertical_metrics(fs)
+	return fontstash.VerticalMetrics(fs)
 }
 
 TextBounds :: proc(
 	ctx: ^Context,
 	x, y: f32,
 	input: string,
-) -> (bounds: [4]f32) {
+	bounds: ^[4]f32 = nil,
+) -> (advance: f32) {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
@@ -2892,25 +2915,31 @@ TextBounds :: proc(
 	}
 
 	fs := &ctx.fs
-	fontstash.state_set_size(fs, state.font_size*scale)
-	fontstash.state_set_spacing(fs, state.letter_spacing*scale)
-	fontstash.state_set_blur(fs, state.font_blur*scale)
-	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
-	fontstash.state_set_align_vertical(fs, state.align_vertical)
-	fontstash.state_set_font(fs, state.font_id)
+	fontstash.SetSize(fs, state.font_size*scale)
+	fontstash.SetSpacing(fs, state.letter_spacing*scale)
+	fontstash.SetBlur(fs, state.font_blur*scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
 
-	width := fontstash.text_bounds(fs, input, x * scale, y * scale, &bounds)
+	width := fontstash.TextBounds(fs, input, x * scale, y * scale, bounds)
 	
 	// Use line bounds for height.
-	bounds[1], bounds[3] = fontstash.line_bounds(fs, y*scale)
-	bounds[0] *= invscale
-	bounds[1] *= invscale
-	bounds[2] *= invscale
-	bounds[3] *= invscale
+	one, two := fontstash.LineBounds(fs, y*scale)
+
+	if bounds != nil {
+		bounds[1] = one
+		bounds[3] = two
+		bounds[0] *= invscale
+		bounds[1] *= invscale
+		bounds[2] *= invscale
+		bounds[3] *= invscale
+	}
 
 	return width * invscale
 }
 
+// text row with relative byte offsets into a string
 Text_Row :: struct {
 	start: int,
 	end: int,
@@ -2935,55 +2964,40 @@ TextBox :: proc(
 	state := __getState(ctx)
 	rows: [2]Text_Row
 
-	ah := state.align_horizontal
-	av := state.align_vertical
-	// halign := state.textAlign & (NVG_ALIGN_LEFT | NVG_ALIGN_CENTER | NVG_ALIGN_RIGHT)
-	// valign := state.textAlign & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE)
-	lineh := 0
-
 	if state.font_id == -1 {
 		return
 	} 
 
 	_, _, line_height := TextMetrics(ctx)
-	// state.textAlign = NVG_ALIGN_LEFT | valign
-	// TODO wtf are the alignments
+	old_align := state.align_horizontal
+	defer state.align_horizontal = old_align
 	state.align_horizontal = .Left
+	rows_mod := rows[:]
 
 	y := y
-	input_breaks := input
-	for {
-		nrows := TextBreakLines(ctx, input_breaks, break_row_width, &rows, 2)
-
-		if nrows == 0 {
-			break
-		}
-
+	input := input
+	for nrows, input_last in TextBreakLines(ctx, &input, break_row_width, &rows_mod) {
 		for i in 0..<nrows {
 			row := &rows[i]
-			Text(ctx, x, y, input_breaks[row.start:row.end])		
+			Text(ctx, x, y, input_last[row.start:row.end])		
 			y += line_height * state.line_height
 		}
-
-		input_breaks = input[rows[nrows - 1].next:]
 	}
-
-	state.align_horizontal = ah
-	state.align_vertical = av
 }
 
+// NOTE text break lines works relative to the string in byte indexes now, instead of on pointers
 TextBreakLines :: proc(
 	ctx: ^Context,
-	text: string,
+	text: ^string,
 	break_row_width: f32,
-	rows: ^[2]Text_Row,
-	max_rows: int,
-) -> int {
+	rows: ^[]Text_Row,
+) -> (nrows: int, last: string, ok: bool) {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := 1.0 / scale
 
 	row_start_x, row_width, row_min_x, row_max_x: f32
+	max_rows := len(rows)
 
 	row_start: int = -1
 	row_end: int = -1
@@ -2996,53 +3010,42 @@ TextBreakLines :: proc(
 	ptype := Codepoint_Type.Space
 	pcodepoint: rune
 
-	if max_rows == 0 || state.font_id == -1 {
-		return 0
+	if max_rows == 0 || state.font_id == -1 || len(text) == 0 {
+		return
 	}
 
-	// if (end == nil)
-	// 	end = string + strlen(string);
-
-	// if (string == end) return 0;
-
 	fs := &ctx.fs
-	fontstash.state_set_size(fs, state.font_size * scale)
-	fontstash.state_set_spacing(fs, state.letter_spacing * scale)
-	fontstash.state_set_blur(fs, state.font_blur * scale)
-	fontstash.state_set_align_horizontal(fs, state.align_horizontal)
-	fontstash.state_set_align_vertical(fs, state.align_vertical)
-	fontstash.state_set_font(fs, state.font_id)
+	fontstash.SetSize(fs, state.font_size * scale)
+	fontstash.SetSpacing(fs, state.letter_spacing * scale)
+	fontstash.SetBlur(fs, state.font_blur * scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
 
 	break_row_width := break_row_width * scale
-	iter := fontstash.text_iter_init(fs, text, 0, 0)
+	iter := fontstash.TextIterInit(fs, text^)
 	prev_iter := iter
 	q: fontstash.Quad
-	nrows: int
-	
-	for fontstash.text_iter_step(fs, &iter, &q) {
+	stopped_early: bool
+
+	for fontstash.TextIterNext(fs, &iter, &q) {
 		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
 			iter = prev_iter;
-			fontstash.text_iter_step(fs, &iter, &q) // try again
+			fontstash.TextIterNext(fs, &iter, &q) // try again
 		}
 		prev_iter = iter
 
 		switch iter.codepoint {
-			case 9, 11, 12, 32, 0x00a0: {
-				// \t
-				// \v
-				// \f
-				// space
+			case '\t', '\v', '\f', ' ', 0x00a0: {
 				// NBSP
 				type = .Space
 			}
 
-			case 10:{
-				// \n
+			case '\n': {
 				type = pcodepoint == 13 ? .Space : .Newline
 			}
 			
-			case 13: {
-				// \r
+			case '\r': {
 				type = pcodepoint == 10 ? .Space : .Newline
 			}
 
@@ -3076,7 +3079,8 @@ TextBreakLines :: proc(
 			nrows += 1
 			
 			if nrows >= max_rows {
-				return nrows
+				stopped_early = true
+				break
 			}
 
 			// Set nil break point
@@ -3144,7 +3148,8 @@ TextBreakLines :: proc(
 						nrows += 1
 
 						if nrows >= max_rows {
-							return nrows
+							stopped_early = true
+							break
 						}
 
 						row_start_x = iter.x
@@ -3166,7 +3171,8 @@ TextBreakLines :: proc(
 						rows[nrows].next = word_start
 						nrows += 1
 						if nrows >= max_rows {
-							return nrows
+							stopped_early = true
+							break
 						}
 						// Update row
 						row_start_x = word_start_x
@@ -3189,7 +3195,7 @@ TextBreakLines :: proc(
 	}
 
 	// Break the line from the end of the last word, and start new line from the beginning of the new.
-	if row_start != -1 {
+	if !stopped_early && row_start != -1 {
 		rows[nrows].start = row_start
 		rows[nrows].end = row_end
 		rows[nrows].width = row_width * invscale
@@ -3199,5 +3205,90 @@ TextBreakLines :: proc(
 		nrows += 1
 	}
 
-	return nrows	
+	// NOTE a bit hacky, row.start / row.end need to work with last string range
+	last = text^
+	// advance early
+	next := rows[nrows - 1].next
+	text^ = text[next:]
+	// terminate the for loop on non ok
+	ok = nrows != 0
+
+	return 
+}
+
+TextBoxBounds :: proc(
+	ctx: ^Context, 
+	x, y: f32, 
+	breakRowWidth: f32, 
+	input: string, 
+	bounds: ^[4]f32,
+) {
+	state := __getState(ctx)
+	rows: [2]Text_Row
+	scale := __getFontScale(state) * ctx.device_px_ratio
+	invscale := 1.0 / scale
+
+	if state.font_id == -1 {
+		if bounds != nil {
+			bounds^ = {}
+		}
+
+		return
+	}
+
+	// alignment
+	halign := state.align_horizontal
+	valign := state.align_vertical
+	old_align := state.align_horizontal
+	defer state.align_horizontal = old_align
+	state.align_horizontal = .Left
+
+	_, _, lineh := TextMetrics(ctx)
+	minx := x
+	maxx := x
+	miny := y
+	maxy := y
+
+	fs := &ctx.fs
+	fontstash.SetSize(fs, state.font_size * scale)
+	fontstash.SetSpacing(fs, state.letter_spacing * scale)
+	fontstash.SetBlur(fs, state.font_blur * scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
+	rminy, rmaxy := fontstash.LineBounds(fs, y*scale)
+	rminy *= invscale
+	rmaxy *= invscale
+
+	input := input
+	rows_mod := rows[:]
+	y := y
+
+	for nrows, input_last in TextBreakLines(ctx, &input, breakRowWidth, &rows_mod) {
+		for i in 0..<nrows {
+			row := &rows[i]
+			rminx, rmaxx, dx: f32
+			
+			// Horizontal bounds
+			switch halign {
+				case .Left: dx = 0
+				case .Middle: dx = breakRowWidth*0.5 - row.width*0.5
+				case .Right: dx = breakRowWidth - row.width
+			}
+
+			rminx = x + row.minx + dx
+			rmaxx = x + row.maxx + dx
+			minx = min(minx, rminx)
+			maxx = max(maxx, rmaxx)
+			// Vertical bounds.
+			miny = min(miny, y + rminy)
+			maxy = max(maxy, y + rmaxy)
+
+			y += lineh * state.line_height
+		}
+	}
+
+	if bounds != nil {
+		bounds^ = { minx, miny, maxx, maxy }
+	}
 }
