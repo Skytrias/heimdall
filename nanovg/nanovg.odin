@@ -1,5 +1,8 @@
 package nanovg
 
+// TODO rename structs to old nanovg style!
+// TODO rename enums to old nanovg style!
+
 import "core:mem"
 import "core:runtime"
 import "core:math"
@@ -600,6 +603,14 @@ TransformPoint :: proc(
 	dy^ = sx * t[1] + sy * t[3] + t[5]
 }
 
+DegToRad :: proc(deg: f32) -> f32 {
+	return deg / 180.0 * math.PI
+}
+
+RadToDeg :: proc(rad: f32) -> f32 {
+	return rad / math.PI * 180.0
+}
+
 ///////////////////////////////////////////////////////////
 // STATE MANAGEMENT
 //
@@ -788,7 +799,7 @@ Translate :: proc(ctx: ^Context, x, y: f32) {
 Rotate :: proc(ctx: ^Context, angle: f32) {
 	state := __getState(ctx)
 	temp: Matrix
-	TransformRotate(&state.xform, angle)
+	TransformRotate(&temp, angle)
 	TransformPremultiply(&state.xform, temp)
 }
 
@@ -796,7 +807,7 @@ Rotate :: proc(ctx: ^Context, angle: f32) {
 SkewX :: proc(ctx: ^Context, angle: f32) {
 	state := __getState(ctx)
 	temp: Matrix
-	TransformSkewX(&state.xform, angle)
+	TransformSkewX(&temp, angle)
 	TransformPremultiply(&state.xform, temp)
 }
 
@@ -804,7 +815,7 @@ SkewX :: proc(ctx: ^Context, angle: f32) {
 SkewY :: proc(ctx: ^Context, angle: f32) {
 	state := __getState(ctx)
 	temp: Matrix
-	TransformSkewY(&state.xform, angle)
+	TransformSkewY(&temp, angle)
 	TransformPremultiply(&state.xform, temp)
 }
 
@@ -812,7 +823,7 @@ SkewY :: proc(ctx: ^Context, angle: f32) {
 Scale :: proc(ctx: ^Context, x, y: f32) {
 	state := __getState(ctx)
 	temp: Matrix
-	TransformScale(&state.xform, x, y)
+	TransformScale(&temp, x, y)
 	TransformPremultiply(&state.xform, temp)
 }
 
@@ -2662,6 +2673,12 @@ TextAlignHorizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
 TextAlignVertical :: proc(ctx: ^Context, align: Align_Vertical) {
 	state := __getState(ctx)
 	state.align_vertical = align
+}
+
+TextAlign :: proc(ctx: ^Context, ah: Align_Horizontal, av: Align_Vertical) {
+	state := __getState(ctx)
+	state.align_horizontal = ah
+	state.align_vertical = av
 }
 
 FontFace :: proc(ctx: ^Context, font: string) {
