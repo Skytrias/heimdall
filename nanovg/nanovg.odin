@@ -304,7 +304,7 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 
 	w := INIT_FONTIMAGE_SIZE
 	h := INIT_FONTIMAGE_SIZE
-	fontstash.init(&ctx.fs, w, h)
+	fontstash.Init(&ctx.fs, w, h, .Top_Left)
 	assert(ctx.params.render_create_texture != nil)
 	ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, nil)
 	ctx.font_image_idx = 0
@@ -314,7 +314,7 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 
 DeleteInternal :: proc(ctx: ^Context) {
 	__deletePathCache(ctx.cache)
-	fontstash.destroy(&ctx.fs)
+	fontstash.Destroy(&ctx.fs)
 
 	for image in &ctx.font_images {
 		if image != 0 {
@@ -1364,9 +1364,12 @@ __pathWinding :: proc(ctx: ^Context, winding: Winding) {
 
 __getAverageScale :: proc(t: []f32) -> f32 {
 	assert(len(t) > 4)
-	sx := math.sqrt(t[0] * t[0] + t[2] * t[2])
-	sy := math.sqrt(t[1] * t[1] + t[3] * t[3])
-	return (sx + sy) * 0.5
+	sx := math.sqrt(f64(t[0]) * f64(t[0]) + f64(t[2]) * f64(t[2]))
+	sy := math.sqrt(f64(t[1]) * f64(t[1]) + f64(t[3]) * f64(t[3]))
+	return f32((sx + sy) * 0.5)
+	// sx := math.sqrt(t[0] * t[0] + t[2] * t[2])
+	// sy := math.sqrt(t[1] * t[1] + t[3] * t[3])
+	// return (sx + sy) * 0.5
 }
 
 __triarea2 :: proc(ax, ay, bx, by, cx, cy: f32) -> f32 {
@@ -1697,8 +1700,8 @@ __bevelJoin :: proc(
 			__vset(dst, lx1, ly1, lu,1)
 			__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 		} else {
-			rx0 = p1.x - p1.dmx * rw;
-			ry0 = p1.y - p1.dmy * rw;
+			rx0 = p1.x - p1.dmx * rw
+			ry0 = p1.y - p1.dmy * rw
 
 			__vset(dst, p1.x, p1.y, 0.5,1)
 			__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
@@ -1725,8 +1728,8 @@ __bevelJoin :: proc(
 			__vset(dst, p1.x + dlx1*lw, p1.y + dly1*lw, lu,1)
 			__vset(dst, rx1, ry1, ru,1)
 		} else {
-			lx0 = p1.x + p1.dmx * lw;
-			ly0 = p1.y + p1.dmy * lw;
+			lx0 = p1.x + p1.dmx * lw
+			ly0 = p1.y + p1.dmy * lw
 
 			__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
 			__vset(dst, p1.x, p1.y, 0.5,1)
@@ -1862,30 +1865,30 @@ __calculateJoins :: proc(
 			dlx1 = p1.dy
 			dly1 = -p1.dx
 			// Calculate extrusions
-			p1.dmx = (dlx0 + dlx1) * 0.5;
-			p1.dmy = (dly0 + dly1) * 0.5;
-			dmr2 = p1.dmx*p1.dmx + p1.dmy*p1.dmy;
+			p1.dmx = (dlx0 + dlx1) * 0.5
+			p1.dmy = (dly0 + dly1) * 0.5
+			dmr2 = p1.dmx*p1.dmx + p1.dmy*p1.dmy
 			if (dmr2 > 0.000001) {
-				scale := 1.0 / dmr2;
+				scale := 1.0 / dmr2
 				if (scale > 600.0) {
-					scale = 600.0;
+					scale = 600.0
 				}
-				p1.dmx *= scale;
-				p1.dmy *= scale;
+				p1.dmx *= scale
+				p1.dmy *= scale
 			}
 
 			// Clear flags, but keep the corner.
 			p1.flags = (.Corner in p1.flags) ? { .Corner } : {}
 
 			// Keep track of left turns.
-			__cross = p1.dx * p0.dy - p0.dx * p1.dy;
+			__cross = p1.dx * p0.dy - p0.dx * p1.dy
 			if __cross > 0.0 {
-				nleft += 1;
+				nleft += 1
 				incl(&p1.flags, Point_Flag.Left)
 			}
 
 			// Calculate if we should use bevel or miter for inner join.
-			limit = max(1.01, min(p0.len, p1.len) * iw);
+			limit = max(1.01, min(p0.len, p1.len) * iw)
 			if (dmr2 * limit * limit) < 1.0 {
 				incl(&p1.flags, Point_Flag.Inner_Bevel)
 			}
@@ -1905,7 +1908,7 @@ __calculateJoins :: proc(
 			p1 = mem.ptr_offset(p1, 1)
 		}
 
-		path.convex = nleft == path.count;
+		path.convex = nleft == path.count
 	}
 }
 
@@ -1999,9 +2002,9 @@ __expandStroke :: proc(
 
 		if !loop {
 			// Add cap
-			dx = p1.x - p0.x;
-			dy = p1.y - p0.y;
-			__normalize(&dx, &dy);
+			dx = p1.x - p0.x
+			dy = p1.y - p0.y
+			__normalize(&dx, &dy)
 
 			if line_cap == .Butt {
 				__buttCapStart(&dst, p0, dx, dy, w, -aa*0.5, aa, u0, u1)
@@ -2037,9 +2040,9 @@ __expandStroke :: proc(
 			__vset(&dst, verts[dst_index + 1].x, verts[dst_index + 1].y, u1, 1)
 		} else {
 			// Add cap
-			dx = p1.x - p0.x;
-			dy = p1.y - p0.y;
-			__normalize(&dx, &dy);
+			dx = p1.x - p0.x
+			dy = p1.y - p0.y
+			__normalize(&dx, &dy)
 
 			if line_cap == .Butt {
 				__buttCapEnd(&dst, p1, dx, dy, w, -aa*0.5, aa, u0, u1)
@@ -2279,7 +2282,7 @@ ArcTo :: proc(
 	radius: f32,
 ) {
 	if len(ctx.commands) == 0 {
-		return;
+		return
 	}
 
 	x0 := ctx.command_x
@@ -2627,14 +2630,19 @@ DebugDumpPathCache :: proc(ctx: ^Context) {
 // Note: currently only solid color fill is supported for text.
 ///////////////////////////////////////////////////////////
 
+// Creates font by loading it from the disk from specified file name.
+// Returns handle to the font.
 CreateFont :: proc(ctx: ^Context, name, filename: string) -> int {
 	return fontstash.AddFontPath(&ctx.fs, name, filename)
 }
 
+// Creates font by loading it from the specified memory chunk.
+// Returns handle to the font.
 CreateFontMem :: proc(ctx: ^Context, name: string, slice: []byte) -> int {
 	return fontstash.AddFontMem(&ctx.fs, name, slice)
 }
 
+// Finds a loaded font of specified name, and returns handle to it, or -1 if the font is not found.
 FindFont :: proc(ctx: ^Context, name: string) -> int {
 	if name == "" {
 		return -1
@@ -2643,6 +2651,7 @@ FindFont :: proc(ctx: ^Context, name: string) -> int {
 	return fontstash.GetFontByName(&ctx.fs, name)
 }
 
+// Adds a fallback font by handle.
 AddFallbackFontId :: proc(ctx: ^Context, base_font, fallback_font: int) -> bool {
 	if base_font == -1 || fallback_font == -1 {
 		return false
@@ -2651,6 +2660,7 @@ AddFallbackFontId :: proc(ctx: ^Context, base_font, fallback_font: int) -> bool 
 	return fontstash.AddFallbackFont(&ctx.fs, base_font, fallback_font)
 }
 
+// Adds a fallback font by name.
 AddFallbackFont :: proc(ctx: ^Context, base_font: string, fallback_font: string) -> bool {
 	return AddFallbackFontId(
 		ctx,
@@ -2659,50 +2669,66 @@ AddFallbackFont :: proc(ctx: ^Context, base_font: string, fallback_font: string)
 	)
 }
 
+// Resets fallback fonts by handle.
 ResetFallbackFontsId :: proc(ctx: ^Context, base_font: int) {
 	fontstash.ResetFallbackFont(&ctx.fs, base_font)
 }
 
+// Resets fallback fonts by name.
 ResetFallbackFonts :: proc(ctx: ^Context, base_font: string) {
 	fontstash.ResetFallbackFont(&ctx.fs, FindFont(ctx, base_font))
 }
 
+// Sets the font size of current text style.
 FontSize :: proc(ctx: ^Context, size: f32) {
 	state := __getState(ctx)
 	state.font_size = size
 }
 
+// Sets the blur of current text style.
 FontBlur :: proc(ctx: ^Context, blur: f32) {
 	state := __getState(ctx)
 	state.font_blur = blur
 }
 
+// Sets the letter spacing of current text style.
 TextLetterSpacing :: proc(ctx: ^Context, spacing: f32) {
 	state := __getState(ctx)
 	state.letter_spacing = spacing
 }
 
+// Sets the proportional line height of current text style. The line height is specified as multiple of font size.
 TextLineHeight :: proc(ctx: ^Context, line_height: f32) {
 	state := __getState(ctx)
 	state.line_height = line_height
 }
 
+// Sets the horizontal text align of current text style
 TextAlignHorizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
 	state := __getState(ctx)
 	state.align_horizontal = align
 }
 
+// Sets the vertical text align of current text style
 TextAlignVertical :: proc(ctx: ^Context, align: Align_Vertical) {
 	state := __getState(ctx)
 	state.align_vertical = align
 }
 
+// Sets the text align of current text style, see NVGalign for options.
 TextAlign :: proc(ctx: ^Context, ah: Align_Horizontal, av: Align_Vertical) {
 	state := __getState(ctx)
 	state.align_horizontal = ah
 	state.align_vertical = av
 }
 
+// Sets the font face based on specified name of current text style.
+FontFaceId :: proc(ctx: ^Context, font: int) {
+	state := __getState(ctx)
+	state.font_id = font
+}
+
+// Sets the font face based on specified name of current text style.
 FontFace :: proc(ctx: ^Context, font: string) {
 	state := __getState(ctx)
 	state.font_id = fontstash.GetFontByName(&ctx.fs, font)
@@ -2710,6 +2736,7 @@ FontFace :: proc(ctx: ^Context, font: string) {
 
 __quantize :: proc(a, d: f32) -> f32 {
 	return f32(int(a / d + 0.5)) * d
+	// return (a / d + 0.5) * d
 }
 
 __getFontScale :: proc(state: ^State) -> f32 {
@@ -2766,7 +2793,7 @@ __allocTextAtlas :: proc(ctx: ^Context) -> bool {
 	ctx.font_image_idx += 1
 	fontstash.ResetAtlas(&ctx.fs, iw, ih)
 
-	return true;
+	return true
 }
 
 __renderText :: proc(ctx: ^Context, verts: []Vertex) {
@@ -2796,10 +2823,91 @@ __isTransformFlipped :: proc(xform: []f32) -> bool {
 	return det < 0
 }
 
+// draw a single codepoint, useful for icons
+TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
+	invscale := f32(1.0) / scale
+	is_flipped := __isTransformFlipped(state.xform[:])
+
+	if state.font_id == -1 {
+		return x
+	}
+
+	fs := &ctx.fs
+	fontstash.SetSize(fs, state.font_size * scale)
+	fontstash.SetSpacing(fs, state.letter_spacing * scale)
+	fontstash.SetBlur(fs, state.font_blur * scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
+
+
+	// fontstash internals
+	fstate := fontstash.__getState(fs)
+	font := fontstash.__getFont(fs, state.font_id)
+	isize := i16(fstate.size * 10)
+	iblur := i16(fstate.blur)
+	glyph := fontstash.__getGlyph(fs, font, codepoint, isize, iblur)
+	fscale := fontstash.__getPixelHeightScale(font, f32(isize) / 10)
+	
+	// transform x / y
+	x := x * scale
+	y := y * scale
+	switch fstate.ah {
+		case .Left: {}
+		case .Middle: {
+			width := fontstash.CodepointWidth(font, codepoint, fscale)
+			x = math.round(x - width * 0.5)
+		}
+		case .Right: {
+			width := fontstash.CodepointWidth(font, codepoint, fscale)
+			x -= width
+		}
+	}
+
+	// align vertically
+	y = math.round(y + fontstash.__getVerticalAlign(fs, font, fstate.av, isize))
+
+	if glyph != nil {
+		q: fontstash.Quad
+		fontstash.__getQuad(fs, font, -1, glyph, fscale, fstate.spacing, &x, &y, &q)
+
+		if is_flipped {
+			q.y0, q.y1 = q.y1, q.y0
+			q.t0, q.t1 = q.t1, q.t0
+		}
+
+		// single glyph only
+		verts := __allocTempVerts(ctx, 6)
+		c: [4 * 2]f32
+	
+		// Transform corners.
+		TransformPoint(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
+		TransformPoint(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
+		TransformPoint(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
+		TransformPoint(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
+		
+		// Create triangles
+		verts[0] = { c[0], c[1], q.s0, q.t0 }
+		verts[1] = { c[4], c[5], q.s1, q.t1 }
+		verts[2] = { c[2], c[3], q.s1, q.t0 }
+		verts[3] = { c[0], c[1], q.s0, q.t0 }
+		verts[4] = { c[6], c[7], q.s0, q.t1 }
+		verts[5] = { c[4], c[5], q.s1, q.t1 }
+
+		__flushTextTexture(ctx)
+		__renderText(ctx, verts[:])
+	}
+
+	return x / scale	
+}
+
+// Draws text string at specified location. If end is specified only the sub-string up to the end is drawn.
 Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
-	invscale := 1.0 / scale
+	invscale := f32(1.0) / scale
 	is_flipped := __isTransformFlipped(state.xform[:])
 
 	if state.font_id == -1 {
@@ -2818,8 +2926,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	verts := __allocTempVerts(ctx, cverts)
 	nverts: int
 
-	// TODO add FONS_GLYPH_BITMAP_REQUIRED?
-	iter := fontstash.TextIterInit(fs, text, x * scale, y * scale)
+	iter := fontstash.TextIterInit(fs, x * scale, y * scale, text)
 	prev_iter := iter
 	q: fontstash.Quad
 	for fontstash.TextIterNext(&ctx.fs, &iter, &q) {
@@ -2875,15 +2982,17 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 
 	// TODO: add back-end bit to do this just once per frame.
 	__flushTextTexture(ctx)
-	__renderText(ctx, verts)
+	__renderText(ctx, verts[:nverts])
 
 	return iter.nextx / scale
 }
 
+// Returns the vertical metrics based on the current text style.
+// Measured values are returned in local coordinate space.
 TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
-	invscale := 1.0 / scale
+	invscale := f32(1.0) / scale
 
 	if state.font_id == -1 {
 		return
@@ -2897,9 +3006,17 @@ TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
 	fontstash.SetAlignVertical(fs, state.align_vertical)
 	fontstash.SetFont(fs, state.font_id)
 
-	return fontstash.VerticalMetrics(fs)
+	ascender, descender, line_height = fontstash.VerticalMetrics(fs)
+	ascender *= invscale
+	descender *= invscale
+	line_height *= invscale
+	return
 }
 
+// Measures the specified text string. Parameter bounds should be a pointer to float[4],
+// if the bounding box of the text should be returned. The bounds value are [xmin,ymin, xmax,ymax]
+// Returns the horizontal advance of the measured text (i.e. where the next character should drawn).
+// Measured values are returned in local coordinate space.
 TextBounds :: proc(
 	ctx: ^Context,
 	x, y: f32,
@@ -2908,7 +3025,7 @@ TextBounds :: proc(
 ) -> (advance: f32) {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
-	invscale := 1.0 / scale
+	invscale := f32(1.0) / scale
 
 	if state.font_id == -1 {
 		return {}
@@ -2955,6 +3072,9 @@ Codepoint_Type :: enum {
 	CJK,
 }
 
+// Draws multi-line text string at specified location wrapped at the specified width. If end is specified only the sub-string up to the end is drawn.
+// White space is stripped at the beginning of the rows, the text is split at word boundaries or when new-line characters are encountered.
+// Words longer than the max width are slit at nearest character (i.e. no hyphenation).
 TextBox :: proc(
 	ctx: ^Context, 
 	x, y: f32,
@@ -2986,6 +3106,9 @@ TextBox :: proc(
 }
 
 // NOTE text break lines works relative to the string in byte indexes now, instead of on pointers
+// Breaks the specified text into lines
+// White space is stripped at the beginning of the rows, the text is split at word boundaries or when new-line characters are encountered.
+// Words longer than the max width are slit at nearest character (i.e. no hyphenation).
 TextBreakLines :: proc(
 	ctx: ^Context,
 	text: ^string,
@@ -3023,14 +3146,14 @@ TextBreakLines :: proc(
 	fontstash.SetFont(fs, state.font_id)
 
 	break_row_width := break_row_width * scale
-	iter := fontstash.TextIterInit(fs, text^)
+	iter := fontstash.TextIterInit(fs, 0, 0, text^)
 	prev_iter := iter
 	q: fontstash.Quad
 	stopped_early: bool
 
 	for fontstash.TextIterNext(fs, &iter, &q) {
 		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
-			iter = prev_iter;
+			iter = prev_iter
 			fontstash.TextIterNext(fs, &iter, &q) // try again
 		}
 		prev_iter = iter
@@ -3216,6 +3339,9 @@ TextBreakLines :: proc(
 	return 
 }
 
+// Measures the specified multi-text string. Parameter bounds should be a pointer to float[4],
+// if the bounding box of the text should be returned. The bounds value are [xmin,ymin, xmax,ymax]
+// Measured values are returned in local coordinate space.
 TextBoxBounds :: proc(
 	ctx: ^Context, 
 	x, y: f32, 
@@ -3226,7 +3352,7 @@ TextBoxBounds :: proc(
 	state := __getState(ctx)
 	rows: [2]Text_Row
 	scale := __getFontScale(state) * ctx.device_px_ratio
-	invscale := 1.0 / scale
+	invscale := f32(1.0) / scale
 
 	if state.font_id == -1 {
 		if bounds != nil {
@@ -3256,7 +3382,7 @@ TextBoxBounds :: proc(
 	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
 	fontstash.SetAlignVertical(fs, state.align_vertical)
 	fontstash.SetFont(fs, state.font_id)
-	rminy, rmaxy := fontstash.LineBounds(fs, y*scale)
+	rminy, rmaxy := fontstash.LineBounds(fs, 0)
 	rminy *= invscale
 	rmaxy *= invscale
 
@@ -3291,4 +3417,59 @@ TextBoxBounds :: proc(
 	if bounds != nil {
 		bounds^ = { minx, miny, maxx, maxy }
 	}
+}
+
+Glyph_Position :: struct {
+	str: int,
+	x: f32,
+	minx, maxx: f32,
+}
+
+// Calculates the glyph x positions of the specified text.
+// Measured values are returned in local coordinate space.
+TextGlyphPositions :: proc(
+	ctx: ^Context, 
+	x, y: f32, 
+	text: string, 
+	positions: ^[]Glyph_Position,
+) -> int {
+	state := __getState(ctx)
+	scale := __getFontScale(state) * ctx.device_px_ratio
+	invscale := f32(1.0) / scale
+
+	if state.font_id == -1 || len(text) == 0 {
+		return 0
+	}
+
+	fs := &ctx.fs
+	fontstash.SetSize(fs, state.font_size*scale)
+	fontstash.SetSpacing(fs, state.letter_spacing*scale)
+	fontstash.SetBlur(fs, state.font_blur*scale)
+	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
+	fontstash.SetAlignVertical(fs, state.align_vertical)
+	fontstash.SetFont(fs, state.font_id)
+
+	iter := fontstash.TextIterInit(fs, x*scale, y*scale, text)
+	prev_iter := iter
+	q: fontstash.Quad
+	npos: int
+	for fontstash.TextIterNext(fs, &iter, &q) {
+		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
+			iter = prev_iter
+			fontstash.TextIterNext(fs, &iter, &q) // try again
+		}
+
+		prev_iter = iter
+		positions[npos].str = iter.str
+		positions[npos].x = iter.x * invscale
+		positions[npos].minx = min(iter.x, q.x0) * invscale
+		positions[npos].maxx = max(iter.nextx, q.x1) * invscale
+		npos += 1
+		
+		if npos >= len(positions) {
+			break
+		}
+	}
+
+	return npos
 }

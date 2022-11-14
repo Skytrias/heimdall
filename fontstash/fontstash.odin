@@ -1,8 +1,5 @@
 package fontstash
 
-// TODO fallbacks?
-// TODO freetype support?
-
 import "core:runtime"
 import "core:fmt"
 import "core:log"
@@ -24,13 +21,8 @@ import stbtt "vendor:stb/truetype"
 // Changes from the original:
 // stb truetype only 
 // no scratch allocation -> parts use odins dynamic arrays
-// different procedure naming as this will be used as a package, renaming Fons -> Font
 // leaves GPU vertex creation & texture management up to the user
 // texture atlas expands by default
-
-// other:
-// TODO
-// wrapped text for wrapped text & caret layouting
 
 INVALID :: -1
 MAX_STATES :: 20
@@ -91,6 +83,11 @@ Vertex :: struct #packed {
 	color: [4]u8,
 }
 
+Quad_Location :: enum {
+	Top_Left,
+	Bottom_Left,
+}
+
 Font_Context :: struct {
 	fonts: [dynamic]Font, // allocated using context.allocator
 
@@ -105,21 +102,25 @@ Font_Context :: struct {
 
 	// state 
 	states: []State,
- 	state_count: int, // used states
- 	
- 	// dirty rectangle of the texture region that was updated
- 	dirty_rect: [4]f32,
+	state_count: int, // used states
 
- 	// callbacks with user_data passed
- 	user_data: rawptr, // by default set to the context
- 	// called when a texture is expanded and needs handling
- 	callback_resize: proc(data: rawptr, w, h: int), 
- 	// called in state_end to update the texture region that changed
- 	callback_update: proc(data: rawptr, dirty_rect: [4]f32, texture_data: rawptr), 
+	location: Quad_Location,
+
+	// dirty rectangle of the texture region that was updated
+	dirty_rect: [4]f32,
+
+	// callbacks with user_data passed
+	user_data: rawptr, // by default set to the context
+
+	// called when a texture is expanded and needs handling
+	callback_resize: proc(data: rawptr, w, h: int), 
+	// called in state_end to update the texture region that changed
+	callback_update: proc(data: rawptr, dirty_rect: [4]f32, texture_data: rawptr), 
 }
 
-init :: proc(using ctx: ^Font_Context, w, h: int) {
+Init :: proc(using ctx: ^Font_Context, w, h: int, loc: Quad_Location) {
 	user_data = ctx
+	location = loc
 	fonts = make([dynamic]Font, 0, 8)
 
 	itw = f32(1) / f32(w)
@@ -138,13 +139,13 @@ init :: proc(using ctx: ^Font_Context, w, h: int) {
 		width = i16(w),
 	})
 
-	__fontAtlasAddWhiteRect(ctx, 2, 2)
+	__AtlasAddWhiteRect(ctx, 2, 2)
 
 	PushState(ctx)
 	ClearState(ctx)
 }
 
-destroy :: proc(using ctx: ^Font_Context) {
+Destroy :: proc(using ctx: ^Font_Context) {
 	for font in &fonts {
 		delete(font.loaded_data)
 		delete(font.glyphs)
@@ -156,7 +157,7 @@ destroy :: proc(using ctx: ^Font_Context) {
 	delete(nodes)
 }
 
-reset :: proc(using ctx: ^Font_Context) {
+Reset :: proc(using ctx: ^Font_Context) {
 	__atlasReset(ctx, width, height)
 	__dirtyRectReset(ctx)
 	mem.zero_slice(texture_data)
@@ -165,7 +166,7 @@ reset :: proc(using ctx: ^Font_Context) {
 		__lutReset(&font)
 	}
 
-	__fontAtlasAddWhiteRect(ctx, 2, 2)
+	__AtlasAddWhiteRect(ctx, 2, 2)
 	PushState(ctx)
 	ClearState(ctx)
 }
@@ -220,7 +221,7 @@ __atlasReset :: proc(using ctx: ^Font_Context, w, h: int) {
 	})
 }
 
-__fontAtlasAddSkylineLevel :: proc(using ctx: ^Font_Context, idx, x, y, w, h: int) {
+__AtlasAddSkylineLevel :: proc(using ctx: ^Font_Context, idx, x, y, w, h: int) {
 	// insert new node
 	__atlasInsertNode(ctx, idx, x, y + h, w)
 
@@ -252,7 +253,7 @@ __fontAtlasAddSkylineLevel :: proc(using ctx: ^Font_Context, idx, x, y, w, h: in
 	}
 }
 
-__fontAtlasRectFits :: proc(using ctx: ^Font_Context, i, w, h: int) -> int {
+__AtlasRectFits :: proc(using ctx: ^Font_Context, i, w, h: int) -> int {
 	// Checks if there is enough space at the location of skyline span 'i',
 	// and return the max height of all skyline spans under that at that location,
 	// (think tetris block being dropped at that position). Or -1 if no space found.
@@ -282,14 +283,14 @@ __fontAtlasRectFits :: proc(using ctx: ^Font_Context, i, w, h: int) -> int {
 	return y
 }
 
-__fontAtlasAddRect :: proc(using ctx: ^Font_Context, rw, rh: int) -> (rx, ry: int, ok: bool) {
+__AtlasAddRect :: proc(using ctx: ^Font_Context, rw, rh: int) -> (rx, ry: int, ok: bool) {
 	besth := height
 	bestw := width
 	besti, bestx, besty := -1, -1, -1
 
 	// Bottom left fit heuristic.
 	for i in 0..<len(nodes) {
-		y := __fontAtlasRectFits(ctx, i, rw, rh)
+		y := __AtlasRectFits(ctx, i, rw, rh)
 		
 		if y != -1 {
 			if y + rh < besth || (y + rh == besth && int(nodes[i].width) < bestw) {
@@ -307,15 +308,15 @@ __fontAtlasAddRect :: proc(using ctx: ^Font_Context, rw, rh: int) -> (rx, ry: in
 	}
 
 	// Perform the actual packing.
-	__fontAtlasAddSkylineLevel(ctx, besti, bestx, besty, rw, rh) 
+	__AtlasAddSkylineLevel(ctx, besti, bestx, besty, rw, rh) 
 	ok = true
 	rx = bestx
 	ry = besty
 	return
 }
 
-__fontAtlasAddWhiteRect :: proc(ctx: ^Font_Context, w, h: int) {
-	gx, gy, ok := __fontAtlasAddRect(ctx, w, h)
+__AtlasAddWhiteRect :: proc(ctx: ^Font_Context, w, h: int) {
+	gx, gy, ok := __AtlasAddRect(ctx, w, h)
 
 	if !ok {
 		return
@@ -379,7 +380,7 @@ AddFontMem :: proc(
 AddFont :: proc { AddFontPath, AddFontMem }
 
 AddFallbackFont :: proc(ctx: ^Font_Context, base, fallback: int) -> bool {
-	base_font := __fontGet(ctx, base)
+	base_font := __getFont(ctx, base)
 	
 	if base_font.nfallbacks < MAX_FALLBACKS {
 		base_font.fallbacks[base_font.nfallbacks] = fallback
@@ -391,7 +392,7 @@ AddFallbackFont :: proc(ctx: ^Font_Context, base, fallback: int) -> bool {
 }
 
 ResetFallbackFont :: proc(ctx: ^Font_Context, base: int) {
-	base_font := __fontGet(ctx, base)
+	base_font := __getFont(ctx, base)
 	base_font.nfallbacks = 0
 	clear(&base_font.glyphs)
 	__lutReset(base_font)
@@ -484,8 +485,9 @@ __getGlyph :: proc(
 	render_font := font // font used to render
 	glyph_index := __getGlyph_index(font, codepoint)
 	if glyph_index == 0 {
+		// lookout for possible fallbacks
 		for i in 0..<font.nfallbacks {
-			fallback_font := __fontGet(ctx, font.fallbacks[i])
+			fallback_font := __getFont(ctx, font.fallbacks[i])
 			fallback_index := __getGlyph_index(fallback_font, codepoint)
 
 			if fallback_index != 0 {
@@ -505,11 +507,11 @@ __getGlyph :: proc(
 	gh := (y1 - y0) + i32(padding) * 2 
 
 	// Find free spot for the rect in the atlas
-	gx, gy, ok := __fontAtlasAddRect(ctx, int(gw), int(gh))
+	gx, gy, ok := __AtlasAddRect(ctx, int(gw), int(gh))
 	if !ok {
 		// try again with expanded
 		ExpandAtlas(ctx, ctx.width * 2, ctx.height * 2)
-		gx, gy, ok = __fontAtlasAddRect(ctx, int(gw), int(gh))
+		gx, gy, ok = __AtlasAddRect(ctx, int(gw), int(gh))
 	}
 
 	// still not ok?
@@ -724,7 +726,7 @@ ResetAtlas :: proc(ctx: ^Font_Context, width, height: int, allocator := context.
 	ctx.itw = 1.0 / f32(width)
 	ctx.ith = 1.0 / f32(height)
 
-	__fontAtlasAddWhiteRect(ctx, 2, 2)
+	__AtlasAddWhiteRect(ctx, 2, 2)
 	return true
 }
 
@@ -736,25 +738,12 @@ __getPixelHeightScale :: proc(font: ^Font, pixel_height: f32) -> f32 {
 	return stbtt.ScaleForPixelHeight(&font.info, pixel_height)
 }
 
-// // codepoint xadvance polling
-// codepoint_xadvance :: proc(font: ^Font, codepoint: rune, scale: f32) -> f32 {
-// 	glyph_index := __getGlyph_index(font, codepoint)
-// 	return math.round(glyph_xadvance(font, glyph_index) * scale)
-// }
-
-// // glyph based xadvance polling
-// glyph_xadvance :: proc(font: ^Font, glyph_index: Glyph_Index) -> f32 {
-// 	xadvance, lsb: i32
-// 	stbtt.GetGlyphHMetrics(&font.info, glyph_index, &xadvance, &lsb)
-// 	return f32(xadvance)
-// }
-
 __getGlyphKernAdvance :: proc(font: ^Font, glyph1, glyph2: Glyph_Index) -> i32 {
 	return stbtt.GetGlyphKernAdvance(&font.info, glyph1, glyph2)
 }
 
 // get a font with bounds checking
-__fontGet :: proc(ctx: ^Font_Context, index: int, loc := #caller_location) -> ^Font #no_bounds_check {
+__getFont :: proc(ctx: ^Font_Context, index: int, loc := #caller_location) -> ^Font #no_bounds_check {
 	runtime.bounds_check_error_loc(loc, index, len(ctx.fonts))
 	return &ctx.fonts[index]
 }
@@ -774,12 +763,19 @@ CodepointWidth :: proc(
 // get top and bottom line boundary
 LineBounds :: proc(ctx: ^Font_Context, y: f32) -> (miny, maxy: f32) {
 	state := __getState(ctx)
-	font := __fontGet(ctx, state.font)
-	isize := i16(state.size * 10)
+	font := __getFont(ctx, state.font)
+	isize := i16(state.size * 10.0)
 	y := y
-	y += __getVerticalAlign(font, isize, state.av)
-	miny = y - font.ascender * f32(isize / 10)
-	maxy = miny + font.line_height * f32(isize / 10)
+	y += __getVerticalAlign(ctx, font, state.av, isize)
+
+	if ctx.location == .Top_Left {
+		miny = y - font.ascender * f32(isize) / 10
+		maxy = miny + font.line_height * f32(isize / 10)
+	} else if ctx.location == .Bottom_Left {
+		miny = y + font.ascender * f32(isize) / 10
+		maxy = miny - font.line_height * f32(isize / 10)
+	}
+
 	return
 }
 
@@ -807,25 +803,28 @@ ValidateTexture :: proc(using ctx: ^Font_Context, dirty: ^[4]f32) -> bool {
 
 // get alignment based on font
 __getVerticalAlign :: proc(
+	ctx: ^Font_Context,
 	font: ^Font,
-	pixel_size: i16,
 	av: Align_Vertical,
+	pixel_size: i16,
 ) -> (res: f32) {
-	switch av {
-		case .Top: {
-			res = (font.ascender) * f32(pixel_size / 10)
+	switch ctx.location {
+		case .Top_Left: {
+			switch av {
+				case .Top: res = font.ascender * f32(pixel_size) / 10
+				case .Middle: res = (font.ascender + font.descender) / 2 * f32(pixel_size) / 10
+				case .Baseline: res = 0
+				case .Bottom: res = font.descender * f32(pixel_size) / 10
+			}
 		}
 
-		case .Middle: {
-			res = (font.ascender + font.descender) / 2 * f32(pixel_size / 10)
-		}
-
-		case .Baseline: {
-			res = 0
-		}
-
-		case .Bottom: {
-			res = (font.descender) * f32(pixel_size / 10)
+		case .Bottom_Left: {
+			switch av {
+				case .Top: res = -font.ascender * f32(pixel_size) / 10
+				case .Middle: res = -(font.ascender + font.descender) / 2 * f32(pixel_size) / 10
+				case .Baseline: res = 0
+				case .Bottom: res = -font.descender * f32(pixel_size) / 10
+			}
 		}
 	}
 
@@ -933,7 +932,7 @@ ClearState :: proc(ctx: ^Font_Context) {
 	state.spacing = 0
 	state.font = 0
 	state.ah = .Left
-	state.av = .Top
+	state.av = .Baseline
 }
 
 __getState :: #force_inline proc(ctx: ^Font_Context) -> ^State #no_bounds_check {
@@ -997,20 +996,38 @@ __getQuad :: proc(
 	y0 = f32(glyph.y0 + 1)
 	x1 = f32(glyph.x1 - 1)
 	y1 = f32(glyph.y1 - 1)
-	rx = f32(int(x^) + int(xoff))
-	ry = f32(int(y^) + int(yoff))
 
-	// fill quad
-	quad.x0 = rx
-	quad.y0 = ry
-	quad.x1 = rx + x1 - x0
-	quad.y1 = ry + y1 - y0
+	switch ctx.location {
+		case .Top_Left: {
+			rx = math.floor(x^ + xoff)
+			ry = math.floor(y^ + yoff)
+			
+			quad.x0 = rx
+			quad.y0 = ry
+			quad.x1 = rx + x1 - x0
+			quad.y1 = ry + y1 - y0
 
-	// texture info
-	quad.s0 = x0 * ctx.itw
-	quad.t0 = y0 * ctx.ith
-	quad.s1 = x1 * ctx.itw
-	quad.t1 = y1 * ctx.ith
+			quad.s0 = x0 * ctx.itw
+			quad.t0 = y0 * ctx.ith
+			quad.s1 = x1 * ctx.itw
+			quad.t1 = y1 * ctx.ith
+		}
+
+		case .Bottom_Left: {
+			rx = math.floor(x^ + xoff)
+			ry = math.floor(y^ - yoff)
+
+			quad.x0 = rx
+			quad.y0 = ry
+			quad.x1 = rx + x1 - x0
+			quad.y1 = ry - y1 + y0
+
+			quad.s0 = x0 * ctx.itw
+			quad.t0 = y0 * ctx.ith
+			quad.s1 = x1 * ctx.itw
+			quad.t1 = y1 * ctx.ith
+		}
+	}
 
 	x^ += f32(int(f32(glyph.xadvance) / 10 + 0.5))
 }
@@ -1018,15 +1035,15 @@ __getQuad :: proc(
 // init text iter struct with settings
 TextIterInit :: proc(
 	ctx: ^Font_Context,
+	x: f32,
+	y: f32,
 	text: string,
-	x: f32 = 0,
-	y: f32 = 0,
 ) -> (res: Text_Iter) {
 	state := __getState(ctx)
-	res.font = __fontGet(ctx, state.font)
-	res.isize = i16(state.size * 10)
+	res.font = __getFont(ctx, state.font)
+	res.isize = i16(f32(state.size) * 10)
 	res.iblur = i16(state.blur)
-	res.scale = __getPixelHeightScale(res.font, f32(res.isize / 10))
+	res.scale = __getPixelHeightScale(res.font, f32(res.isize) / 10)
 
 	// align horizontally
 	x := x
@@ -1039,13 +1056,12 @@ TextIterInit :: proc(
 		}
 		case .Right: {
 			width := TextBounds(ctx, text, x, y, nil)
-			// NOTE CUSTOM RIGHT OFFSET
-			x -= width + 5
+			x -= width
 		}
 	}
 
 	// align vertically
-	y = math.round(y + __getVerticalAlign(res.font, res.isize, state.av))
+	y = math.round(y + __getVerticalAlign(ctx, res.font, state.av, res.isize))
 
 	// set positions
 	res.x = x
@@ -1106,7 +1122,7 @@ TextBounds :: proc(
 	state := __getState(ctx)
 	isize := i16(state.size * 10)
 	iblur := i16(state.blur)
-	font := __fontGet(ctx, state.font)
+	font := __getFont(ctx, state.font)
 
 	// bunch of state
 	x := x
@@ -1118,7 +1134,7 @@ TextBounds :: proc(
 	start_x := x
 
 	// iterate	
-	scale := __getPixelHeightScale(font, f32(isize / 10))
+	scale := __getPixelHeightScale(font, f32(isize) / 10)
 	previous_glyph_index: Glyph_Index = -1
 	quad: Quad
 	utf8state: rune
@@ -1136,11 +1152,21 @@ TextBounds :: proc(
 				if quad.x1 > maxx {
 					maxx = quad.x1
 				}
-				if quad.y1 < miny {
-					miny = quad.y1
-				}
-				if quad.y0 > maxy {
-					maxy = quad.y0
+
+				if ctx.location == .Top_Left {
+					if quad.y0 < miny {
+						miny = quad.y0
+					}
+					if quad.y1 > maxy {
+						maxy = quad.y1
+					}
+				} else if ctx.location == .Bottom_Left {
+					if quad.y1 < miny {
+						miny = quad.y1
+					}
+					if quad.y0 > maxy {
+						maxy = quad.y0
+					}
 				}
 			}
 
@@ -1173,8 +1199,8 @@ VerticalMetrics :: proc(
 	ctx: ^Font_Context,
 ) -> (ascender, descender, line_height: f32) {
 	state := __getState(ctx)
-	isize := i16(state.size * 10)
-	font := __fontGet(ctx, state.font)
+	isize := i16(state.size * 10.0)
+	font := __getFont(ctx, state.font)
 	ascender = font.ascender * f32(isize / 10)
 	descender = font.descender * f32(isize / 10)
 	line_height = font.line_height * f32(isize / 10)
