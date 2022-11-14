@@ -195,7 +195,7 @@ Context :: struct {
 	dummy_tex: int,
 }
 
-nearest_pow2 :: proc(num: uint) -> uint {
+__nearestPow2 :: proc(num: uint) -> uint {
 	n := num > 0 ? num - 1 : 0
 	n |= n >> 1
 	n |= n >> 2
@@ -206,7 +206,7 @@ nearest_pow2 :: proc(num: uint) -> uint {
 	return n
 }
 
-bind_texture :: proc(ctx: ^Context, tex: u32) {
+__bindTexture :: proc(ctx: ^Context, tex: u32) {
 	when USE_STATE_FILTER {
 		if ctx.bound_texture != tex {
 			ctx.bound_texture = tex
@@ -217,7 +217,7 @@ bind_texture :: proc(ctx: ^Context, tex: u32) {
 	}
 }
 
-stencil_mask :: proc(ctx: ^Context, mask: u32) {
+__stencilMask :: proc(ctx: ^Context, mask: u32) {
 	when USE_STATE_FILTER {
 		if ctx.stencil_mask != mask {
 			ctx.stencil_mask = mask
@@ -228,7 +228,7 @@ stencil_mask :: proc(ctx: ^Context, mask: u32) {
 	}
 }
 
-stencil_func :: proc(ctx: ^Context, func: u32, ref: i32, mask: u32) {
+__stencilFunc :: proc(ctx: ^Context, func: u32, ref: i32, mask: u32) {
 	when USE_STATE_FILTER {
 		if ctx.stencil_func != func ||
 			ctx.stencil_func_ref != ref ||
@@ -243,7 +243,7 @@ stencil_func :: proc(ctx: ^Context, func: u32, ref: i32, mask: u32) {
 	}
 }
 
-blend_func_separate :: proc(ctx: ^Context, blend: ^Blend) {
+__blendFuncSeparate :: proc(ctx: ^Context, blend: ^Blend) {
 	when USE_STATE_FILTER {
 		if ctx.blend_func != blend^ {
 			ctx.blend_func = blend^
@@ -254,7 +254,7 @@ blend_func_separate :: proc(ctx: ^Context, blend: ^Blend) {
 	}
 }
 
-alloc_texture :: proc(ctx: ^Context) -> (tex: ^Texture) {
+__allocTexture :: proc(ctx: ^Context) -> (tex: ^Texture) {
 	for texture in &ctx.textures {
 		if texture.id == 0 {
 			tex = &texture
@@ -275,7 +275,7 @@ alloc_texture :: proc(ctx: ^Context) -> (tex: ^Texture) {
 }
 
 // TODO could use or_return
-find_texture :: proc(ctx: ^Context, id: int) -> ^Texture {
+__findTexture :: proc(ctx: ^Context, id: int) -> ^Texture {
 	for texture in &ctx.textures {
 		if texture.id == id {
 			return &texture
@@ -285,7 +285,7 @@ find_texture :: proc(ctx: ^Context, id: int) -> ^Texture {
 	return nil
 }
 
-delete_texture :: proc(ctx: ^Context, id: int) -> bool {
+__deleteTexture :: proc(ctx: ^Context, id: int) -> bool {
 	for texture, i in &ctx.textures {
 		if texture.id == id {
 			if texture.tex != 0 && (.No_Delete not_in texture.flags) {
@@ -300,7 +300,7 @@ delete_texture :: proc(ctx: ^Context, id: int) -> bool {
 	return false
 }
 
-delete_shader :: proc(shader: ^Shader) {
+__deleteShader :: proc(shader: ^Shader) {
 	if shader.prog != 0 {
 		gl.DeleteProgram(shader.prog)
 	}
@@ -314,7 +314,7 @@ delete_shader :: proc(shader: ^Shader) {
 	}
 }
 
-get_uniforms :: proc(shader: ^Shader) {
+__getUniforms :: proc(shader: ^Shader) {
 	shader.loc[.View_Size] = gl.GetUniformLocation(shader.prog, "viewSize")
 	shader.loc[.Tex] = gl.GetUniformLocation(shader.prog, "tex")
 	
@@ -328,7 +328,7 @@ get_uniforms :: proc(shader: ^Shader) {
 vert_shader := #load("vert.glsl")
 frag_shader := #load("frag.glsl")
 
-render_create :: proc(uptr: rawptr) -> bool {
+__renderCreate :: proc(uptr: rawptr) -> bool {
 	ctx := cast(^Context) uptr
 
 	// just build the string at runtime
@@ -350,11 +350,11 @@ render_create :: proc(uptr: rawptr) -> bool {
 		strings.write_string(&builder, "#define UNIFORMARRAY_SIZE 11\n")
 	} 
 
-	check_error(ctx, "init")
+	__checkError(ctx, "init")
 
 	shader_header := strings.to_string(builder)
 	anti: string = .Anti_Alias in ctx.flags ? "#define EDGE_AA 1\n" : " "
-	if !create_shader(
+	if !__createShader(
 		&ctx.shader, 
 		shader_header,
 		anti, 
@@ -364,8 +364,8 @@ render_create :: proc(uptr: rawptr) -> bool {
 		return false
 	}
 
-	check_error(ctx, "uniform locations")
-	get_uniforms(&ctx.shader)
+	__checkError(ctx, "uniform locations")
+	__getUniforms(&ctx.shader)
 
 	when GL3 {
 		gl.GenVertexArrays(1, &ctx.vert_arr)
@@ -383,16 +383,16 @@ render_create :: proc(uptr: rawptr) -> bool {
 
 	ctx.frag_size = int(size_of(Frag_Uniforms) + align - size_of(Frag_Uniforms) % align)
 	// ctx.frag_size = size_of(Frag_Uniforms)
-	ctx.dummy_tex = render_create_texture(ctx, .Alpha, 1, 1, {}, nil)
+	ctx.dummy_tex = __renderCreateTexture(ctx, .Alpha, 1, 1, {}, nil)
 
-	check_error(ctx, "create done")
+	__checkError(ctx, "create done")
 	
 	gl.Finish()
 
 	return true
 }
 
-render_create_texture :: proc(
+__renderCreateTexture :: proc(
 	uptr: rawptr, 
 	type: Texture_Type, 
 	w, h: int, 
@@ -400,7 +400,7 @@ render_create_texture :: proc(
 	data: []byte,
 ) -> int {
 	ctx := cast(^Context) uptr
-	tex := alloc_texture(ctx)
+	tex := __allocTexture(ctx)
 
 	if tex == nil {
 		return 0
@@ -408,7 +408,7 @@ render_create_texture :: proc(
 
 	// TODO
 	// when GLES2 {
-	// 	// if nearest_pow2(w) != u32(w) || nearest_pow2(h) != u32(h) {
+	// 	// if __nearestPow2(w) != u32(w) || __nearestPow2(h) != u32(h) {
 
 	// 	// }
 
@@ -429,7 +429,7 @@ render_create_texture :: proc(
 	tex.height = h
 	tex.type = type
 	tex.flags = image_flags
-	bind_texture(ctx, tex.tex)
+	__bindTexture(ctx, tex.tex)
 
 	gl.PixelStorei(gl.UNPACK_ALIGNMENT,1)
 	
@@ -506,13 +506,13 @@ render_create_texture :: proc(
 		}
 	}
 
-	check_error(ctx, "create tex")
-	bind_texture(ctx, 0)
+	__checkError(ctx, "create tex")
+	__bindTexture(ctx, 0)
 
 	return tex.id
 }
 
-check_error :: proc(ctx: ^Context, str: string) {
+__checkError :: proc(ctx: ^Context, str: string) {
 	if .Debug in ctx.flags {
 		err := gl.GetError()
 
@@ -522,7 +522,7 @@ check_error :: proc(ctx: ^Context, str: string) {
 	}
 }
 
-check_program_error :: proc(prog: u32) {
+__checkProgramError :: proc(prog: u32) {
 	status: i32
 	gl.GetProgramiv(prog, gl.LINK_STATUS, &status)
 	length: i32
@@ -538,7 +538,7 @@ check_program_error :: proc(prog: u32) {
 	}
 }
 
-check_shader_error :: proc(shader: u32, type: string) {
+__checkShaderError :: proc(shader: u32, type: string) {
 	status: i32
 	gl.GetShaderiv(shader, gl.COMPILE_STATUS, &status)
 	length: i32
@@ -556,7 +556,7 @@ check_shader_error :: proc(shader: u32, type: string) {
 }
 
 // TODO good case for or_return
-create_shader :: proc(
+__createShader :: proc(
 	shader: ^Shader,
 	header: string,
 	opts: string,
@@ -581,14 +581,14 @@ create_shader :: proc(
 	lengths[2] = i32(len(vshader))
 	gl.ShaderSource(vert, 3, &str[0], &lengths[0])
 	gl.CompileShader(vert)
-	check_shader_error(vert, "vert")
+	__checkShaderError(vert, "vert")
 	
 	// fragment shader
 	str[2] = cstring(raw_data(fshader))
 	lengths[2] = i32(len(fshader))
 	gl.ShaderSource(frag, 3, &str[0], &lengths[0])
 	gl.CompileShader(frag)
-	check_shader_error(frag, "frag")
+	__checkShaderError(frag, "frag")
 
 	gl.AttachShader(prog, vert)
 	gl.AttachShader(prog, frag)
@@ -597,7 +597,7 @@ create_shader :: proc(
 	gl.BindAttribLocation(prog, 1, "tcoord")
 
 	gl.LinkProgram(prog)
-	check_program_error(prog)
+	__checkProgramError(prog)
 
 	shader.prog = prog
 	shader.vert = vert
@@ -605,12 +605,12 @@ create_shader :: proc(
 	return true
 }
 
-render_delete_texture :: proc(uptr: rawptr, image: int) -> bool {
+__renderDeleteTexture :: proc(uptr: rawptr, image: int) -> bool {
 	ctx := cast(^Context) uptr
-	return delete_texture(ctx, image)
+	return __deleteTexture(ctx, image)
 }
 
-render_update_texture :: proc(
+__renderUpdateTexture :: proc(
 	uptr: rawptr, 
 	image: int,
 	x, y: int,
@@ -618,13 +618,13 @@ render_update_texture :: proc(
 	data: []byte,
 ) -> bool {
 	ctx := cast(^Context) uptr
-	tex := find_texture(ctx, image)
+	tex := __findTexture(ctx, image)
 
 	if tex == nil {
 		return false
 	}
 
-	bind_texture(ctx, tex.tex)
+	__bindTexture(ctx, tex.tex)
 
 	gl.PixelStorei(gl.UNPACK_ALIGNMENT,1)
 
@@ -667,14 +667,14 @@ render_update_texture :: proc(
 		gl.PixelStorei(gl.UNPACK_SKIP_ROWS, 0)
 	}
 
-	bind_texture(ctx, 0)
+	__bindTexture(ctx, 0)
 
 	return true
 }
 
-render_get_texture_size :: proc(uptr: rawptr, image: int, w, h: ^int) -> bool {
+__renderGetTextureSize :: proc(uptr: rawptr, image: int, w, h: ^int) -> bool {
 	ctx := cast(^Context) uptr
-	tex := find_texture(ctx, image)
+	tex := __findTexture(ctx, image)
 
 	if tex == nil {
 		return false
@@ -685,7 +685,7 @@ render_get_texture_size :: proc(uptr: rawptr, image: int, w, h: ^int) -> bool {
 	return true
 }
 
-xform_to_mat3x4 :: proc(m3: ^[12]f32, t: [6]f32) {
+__xformToMat3x4 :: proc(m3: ^[12]f32, t: [6]f32) {
 	m3[0] = t[0]
 	m3[1] = t[1]
 	m3[2] = 0
@@ -700,7 +700,7 @@ xform_to_mat3x4 :: proc(m3: ^[12]f32, t: [6]f32) {
 	m3[11] = 0
 }
 
-premul_color :: proc(c: Color) -> (res: Color) {
+__premulColor :: proc(c: Color) -> (res: Color) {
 	res = c
 	res.r *= c.a
 	res.g *= c.a
@@ -708,7 +708,7 @@ premul_color :: proc(c: Color) -> (res: Color) {
 	return
 }
 
-convert_paint :: proc(
+__convertPaint :: proc(
 	ctx: ^Context,
 	frag: ^Frag_Uniforms,
 	paint: ^Paint,
@@ -719,8 +719,8 @@ convert_paint :: proc(
 ) -> bool {
 	invxform: [6]f32
 	frag^ = {}
-	frag.inner_color = premul_color(paint.inner_color)
-	frag.outer_color = premul_color(paint.outer_color)
+	frag.inner_color = __premulColor(paint.inner_color)
+	frag.outer_color = __premulColor(paint.outer_color)
 
 	if scissor.extent[0] < -0.5 || scissor.extent[1] < -0.5 {
 		frag.scissor_mat = {}
@@ -730,7 +730,7 @@ convert_paint :: proc(
 		frag.scissor_scale[1] = 1.0
 	} else {
 		nvg.TransformInverse(&invxform, scissor.xform)
-		xform_to_mat3x4(&frag.scissor_mat, invxform)
+		__xformToMat3x4(&frag.scissor_mat, invxform)
 		frag.scissor_ext[0] = scissor.extent[0]
 		frag.scissor_ext[1] = scissor.extent[1]
 		frag.scissor_scale[0] = math.sqrt(scissor.xform[0]*scissor.xform[0] + scissor.xform[2]*scissor.xform[2]) / fringe
@@ -742,7 +742,7 @@ convert_paint :: proc(
 	frag.stroke_thr = stroke_thr
 
 	if paint.image != 0 {
-		tex := find_texture(ctx, paint.image)
+		tex := __findTexture(ctx, paint.image)
 		
 		if tex == nil {
 			return false
@@ -785,53 +785,53 @@ convert_paint :: proc(
 		nvg.TransformInverse(&invxform, paint.xform)
 	}
 
-	xform_to_mat3x4(&frag.paint_mat, invxform)
+	__xformToMat3x4(&frag.paint_mat, invxform)
 
 	return true
 }
 
-set_uniforms :: proc(ctx: ^Context, uniform_offset: int, image: int) {
+__setUniforms :: proc(ctx: ^Context, uniform_offset: int, image: int) {
 	when GL_USE_UNIFORMBUFFER {
 		gl.BindBufferRange(gl.UNIFORM_BUFFER, FRAG_BINDING, ctx.frag_buf, uniform_offset, size_of(Frag_Uniforms))
 	} else {
-		frag := frag_uniform_ptr(ctx, uniform_offset)
+		frag := __fragUniformPtr(ctx, uniform_offset)
 		gl.Uniform4fv(ctx.shader.loc[.Frag], GL_UNIFORMARRAY_SIZE, cast(^f32) frag)
 	}
 
-	check_error(ctx, "uniform4")
+	__checkError(ctx, "uniform4")
 
 	tex: ^Texture
 	if image != 0 {
-		tex = find_texture(ctx, image)
+		tex = __findTexture(ctx, image)
 	}
 	
 	// If no image is set, use empty texture
 	if tex == nil {
-		tex = find_texture(ctx, ctx.dummy_tex)
+		tex = __findTexture(ctx, ctx.dummy_tex)
 	}
 
-	bind_texture(ctx, tex != nil ? tex.tex : 0)
-	check_error(ctx, "tex paint tex")
+	__bindTexture(ctx, tex != nil ? tex.tex : 0)
+	__checkError(ctx, "tex paint tex")
 }
 
-render_viewport :: proc(uptr: rawptr, width, height, device_pixel_ratio: f32) {
+__renderViewport :: proc(uptr: rawptr, width, height, device_pixel_ratio: f32) {
 	ctx := cast(^Context) uptr
 	ctx.view[0] = width
 	ctx.view[1] = height
 }
 
-fill :: proc(ctx: ^Context, call: ^Call) {
+__fill :: proc(ctx: ^Context, call: ^Call) {
 	paths := ctx.paths[call.path_offset:]
 
 	// Draw shapes
 	gl.Enable(gl.STENCIL_TEST)
-	stencil_mask(ctx, 0xff)
-	stencil_func(ctx, gl.ALWAYS, 0, 0xff)
+	__stencilMask(ctx, 0xff)
+	__stencilFunc(ctx, gl.ALWAYS, 0, 0xff)
 	gl.ColorMask(gl.FALSE, gl.FALSE, gl.FALSE, gl.FALSE)
 
 	// set bindpoint for solid loc
-	set_uniforms(ctx, call.uniform_offset, 0)
-	check_error(ctx, "fill simple")
+	__setUniforms(ctx, call.uniform_offset, 0)
+	__checkError(ctx, "fill simple")
 
 	gl.StencilOpSeparate(gl.FRONT, gl.KEEP, gl.KEEP, gl.INCR_WRAP)
 	gl.StencilOpSeparate(gl.BACK, gl.KEEP, gl.KEEP, gl.DECR_WRAP)
@@ -844,11 +844,11 @@ fill :: proc(ctx: ^Context, call: ^Call) {
 	// Draw anti-aliased pixels
 	gl.ColorMask(gl.TRUE, gl.TRUE, gl.TRUE, gl.TRUE)
 
-	set_uniforms(ctx, call.uniform_offset + ctx.frag_size, call.image)
-	check_error(ctx, "fill fill")
+	__setUniforms(ctx, call.uniform_offset + ctx.frag_size, call.image)
+	__checkError(ctx, "fill fill")
 
 	if .Anti_Alias in ctx.flags {
-		stencil_func(ctx, gl.EQUAL, 0x00, 0xff)
+		__stencilFunc(ctx, gl.EQUAL, 0x00, 0xff)
 		gl.StencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
 		// Draw fringes
 		for i in 0..<call.path_count {
@@ -857,18 +857,18 @@ fill :: proc(ctx: ^Context, call: ^Call) {
 	}
 
 	// Draw fill
-	stencil_func(ctx, gl.NOTEQUAL, 0x0, 0xff)
+	__stencilFunc(ctx, gl.NOTEQUAL, 0x0, 0xff)
 	gl.StencilOp(gl.ZERO, gl.ZERO, gl.ZERO)
 	gl.DrawArrays(gl.TRIANGLE_STRIP, i32(call.triangle_offset), i32(call.triangle_count))
 
 	gl.Disable(gl.STENCIL_TEST)
 }
 
-convex_fill :: proc(ctx: ^Context, call: ^Call) {
+__convexFill :: proc(ctx: ^Context, call: ^Call) {
 	paths := ctx.paths[call.path_offset:]
 
-	set_uniforms(ctx, call.uniform_offset, call.image)
-	check_error(ctx, "convex fill")
+	__setUniforms(ctx, call.uniform_offset, call.image)
+	__checkError(ctx, "convex fill")
 
 	for i in 0..<call.path_count {
 		gl.DrawArrays(gl.TRIANGLE_FAN, i32(paths[i].fill_offset), i32(paths[i].fill_count))
@@ -880,26 +880,26 @@ convex_fill :: proc(ctx: ^Context, call: ^Call) {
 	}
 }
 
-stroke :: proc(ctx: ^Context, call: ^Call) {
+__stroke :: proc(ctx: ^Context, call: ^Call) {
 	paths := ctx.paths[call.path_offset:]
 
 	if .Stencil_Strokes in ctx.flags {
 		gl.Enable(gl.STENCIL_TEST)
-		stencil_mask(ctx, 0xff)
+		__stencilMask(ctx, 0xff)
 
 		// Fill the stroke base without overlap
-		stencil_func(ctx, gl.EQUAL, 0x0, 0xff)
+		__stencilFunc(ctx, gl.EQUAL, 0x0, 0xff)
 		gl.StencilOp(gl.KEEP, gl.KEEP, gl.INCR)
-		set_uniforms(ctx, call.uniform_offset + ctx.frag_size, call.image)
-		check_error(ctx, "stroke fill 0")
+		__setUniforms(ctx, call.uniform_offset + ctx.frag_size, call.image)
+		__checkError(ctx, "stroke fill 0")
 		
 		for i in 0..<call.path_count {
 			gl.DrawArrays(gl.TRIANGLE_STRIP, i32(paths[i].stroke_offset), i32(paths[i].stroke_count))
 		}
 
 		// Draw anti-aliased pixels.
-		set_uniforms(ctx, call.uniform_offset, call.image)
-		stencil_func(ctx, gl.EQUAL, 0x00, 0xff)
+		__setUniforms(ctx, call.uniform_offset, call.image)
+		__stencilFunc(ctx, gl.EQUAL, 0x00, 0xff)
 		gl.StencilOp(gl.KEEP, gl.KEEP, gl.KEEP)
 		for i in 0..<call.path_count {
 			gl.DrawArrays(gl.TRIANGLE_STRIP, i32(paths[i].stroke_offset), i32(paths[i].stroke_count))
@@ -907,9 +907,9 @@ stroke :: proc(ctx: ^Context, call: ^Call) {
 
 		// Clear stencil buffer.
 		gl.ColorMask(gl.FALSE, gl.FALSE, gl.FALSE, gl.FALSE)
-		stencil_func(ctx, gl.ALWAYS, 0x0, 0xff)
+		__stencilFunc(ctx, gl.ALWAYS, 0x0, 0xff)
 		gl.StencilOp(gl.ZERO, gl.ZERO, gl.ZERO)
-		check_error(ctx, "stroke fill 1")
+		__checkError(ctx, "stroke fill 1")
 		for i in 0..<call.path_count {
 			gl.DrawArrays(gl.TRIANGLE_STRIP, i32(paths[i].stroke_offset), i32(paths[i].stroke_count))
 		}
@@ -917,8 +917,8 @@ stroke :: proc(ctx: ^Context, call: ^Call) {
 
 		gl.Disable(gl.STENCIL_TEST)
 	} else {
-		set_uniforms(ctx, call.uniform_offset, call.image)
-		check_error(ctx, "stroke fill")
+		__setUniforms(ctx, call.uniform_offset, call.image)
+		__checkError(ctx, "stroke fill")
 		
 		// Draw Strokes
 		for i in 0..<call.path_count {
@@ -927,13 +927,13 @@ stroke :: proc(ctx: ^Context, call: ^Call) {
 	}
 }
 
-triangles :: proc(ctx: ^Context, call: ^Call) {
-	set_uniforms(ctx, call.uniform_offset, call.image)
-	check_error(ctx, "triangles fill")
+__triangles :: proc(ctx: ^Context, call: ^Call) {
+	__setUniforms(ctx, call.uniform_offset, call.image)
+	__checkError(ctx, "triangles fill")
 	gl.DrawArrays(gl.TRIANGLES, i32(call.triangle_offset), i32(call.triangle_count))
 }
 
-render_cancel :: proc(uptr: rawptr) {
+__renderCancel :: proc(uptr: rawptr) {
 	ctx := cast(^Context) uptr
 	clear(&ctx.verts)
 	clear(&ctx.paths)
@@ -955,7 +955,7 @@ BLEND_FACTOR_TABLE :: [nvg.Blend_Factor]u32 {
 	.SRC_ALPHA_SATURATE = gl.SRC_ALPHA_SATURATE,
 }
 
-blend_composite_operation :: proc(op: nvg.Composite_Operation_State) -> Blend {
+__blendCompositeOperation :: proc(op: nvg.Composite_Operation_State) -> Blend {
 	table := BLEND_FACTOR_TABLE
 	blend := Blend {
 		table[op.src_RGB],
@@ -966,7 +966,7 @@ blend_composite_operation :: proc(op: nvg.Composite_Operation_State) -> Blend {
 	return blend
 }
 
-render_flush :: proc(uptr: rawptr) {
+__renderFlush :: proc(uptr: rawptr) {
 	ctx := cast(^Context) uptr
 
 	if len(ctx.calls) > 0 {
@@ -1026,14 +1026,14 @@ render_flush :: proc(uptr: rawptr) {
 
 		for i in 0..<len(ctx.calls) {
 			call := &ctx.calls[i]
-			blend_func_separate(ctx, &call.blend_func)
+			__blendFuncSeparate(ctx, &call.blend_func)
 
 			switch call.type {
 				case .None: {}
-				case .Fill: fill(ctx, call)
-				case .Convex_Fill: convex_fill(ctx, call)
-				case .Stroke: stroke(ctx, call)
-				case .Triangles: triangles(ctx, call)
+				case .Fill: __fill(ctx, call)
+				case .Convex_Fill: __convexFill(ctx, call)
+				case .Stroke: __stroke(ctx, call)
+				case .Triangles: __triangles(ctx, call)
 			}
 		}
 
@@ -1047,7 +1047,7 @@ render_flush :: proc(uptr: rawptr) {
 		gl.Disable(gl.CULL_FACE)
 		gl.BindBuffer(gl.ARRAY_BUFFER, 0)
 		gl.UseProgram(0)
-		bind_texture(ctx, 0)
+		__bindTexture(ctx, 0)
 	}
 
 	// Reset calls
@@ -1057,7 +1057,7 @@ render_flush :: proc(uptr: rawptr) {
 	clear(&ctx.uniforms)
 }
 
-max_vert_count :: proc(paths: []nvg.Path) -> (count: int) {
+__maxVertCount :: proc(paths: []nvg.Path) -> (count: int) {
 	for i in 0..<len(paths) {
 		count += len(paths[i].fill)
 		count += len(paths[i].stroke)
@@ -1065,34 +1065,34 @@ max_vert_count :: proc(paths: []nvg.Path) -> (count: int) {
 	return
 }
 
-alloc_call :: #force_inline proc(ctx: ^Context) -> ^Call {
+__allocCall :: #force_inline proc(ctx: ^Context) -> ^Call {
 	append(&ctx.calls, Call {})
 	return &ctx.calls[len(ctx.calls) - 1]
 }
 
 // alloc paths and return the original start position
-alloc_paths :: proc(ctx: ^Context, count: int) -> int {
+__allocPaths :: proc(ctx: ^Context, count: int) -> int {
 	old := len(ctx.paths)
 	resize(&ctx.paths, len(ctx.paths) + count)
 	return old
 }
 
 // alloc verts and return the original start position
-alloc_verts :: proc(ctx: ^Context, count: int) -> int {
+__allocVerts :: proc(ctx: ^Context, count: int) -> int {
 	old := len(ctx.verts)
 	resize(&ctx.verts, len(ctx.verts) + count)
 	return old
 }
 
 // alloc uniforms and return the original start position
-alloc_frag_uniforms :: proc(ctx: ^Context, count: int) -> int {
+__allocFragUniforms :: proc(ctx: ^Context, count: int) -> int {
 	ret := len(ctx.uniforms)
 	resize(&ctx.uniforms, len(ctx.uniforms) + count * ctx.frag_size)
 	return ret
 }
 
 // get frag uniforms from byte slice offset
-frag_uniform_ptr :: proc(ctx: ^Context, offset: int) -> ^Frag_Uniforms {
+__fragUniformPtr :: proc(ctx: ^Context, offset: int) -> ^Frag_Uniforms {
 	return cast(^Frag_Uniforms) &ctx.uniforms[offset]
 }
 
@@ -1100,7 +1100,7 @@ frag_uniform_ptr :: proc(ctx: ^Context, offset: int) -> ^Frag_Uniforms {
 // CALLBACKS
 ///////////////////////////////////////////////////////////
 
-render_fill :: proc(
+__renderFill :: proc(
 	uptr: rawptr, 
 	paint: ^nvg.Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
@@ -1110,14 +1110,14 @@ render_fill :: proc(
 	paths: []nvg.Path,
 ) {
 	ctx := cast(^Context) uptr
-	call := alloc_call(ctx)
+	call := __allocCall(ctx)
 
 	call.type = .Fill
 	call.triangle_count = 4
-	call.path_offset = alloc_paths(ctx, len(paths))
+	call.path_offset = __allocPaths(ctx, len(paths))
 	call.path_count = len(paths)
 	call.image = paint.image
-	call.blend_func = blend_composite_operation(composite_operation)
+	call.blend_func = __blendCompositeOperation(composite_operation)
 
 	if len(paths) == 1 && paths[0].convex {
 		call.type = .Convex_Fill
@@ -1125,8 +1125,8 @@ render_fill :: proc(
 	}
 
 	// allocate vertices for all the paths
-	maxverts := max_vert_count(paths) + call.triangle_count
-	offset := alloc_verts(ctx, maxverts)
+	maxverts := __maxVertCount(paths) + call.triangle_count
+	offset := __allocVerts(ctx, maxverts)
 
 	for i in 0..<len(paths) {
 		copy := &ctx.paths[call.path_offset + i]
@@ -1159,16 +1159,16 @@ render_fill :: proc(
 		quad[3] = { bounds[0], bounds[1], 0.5, 1 }
 
 		// simple shader for stencil
-		call.uniform_offset = alloc_frag_uniforms(ctx, 2)
-		frag := frag_uniform_ptr(ctx, call.uniform_offset)
+		call.uniform_offset = __allocFragUniforms(ctx, 2)
+		frag := __fragUniformPtr(ctx, call.uniform_offset)
 		frag^ = {}
 		frag.stroke_thr = -1
 		frag.type = .Simple
 
 		// fill shader
-		convert_paint(
+		__convertPaint(
 			ctx, 
-			frag_uniform_ptr(ctx, call.uniform_offset + ctx.frag_size),
+			__fragUniformPtr(ctx, call.uniform_offset + ctx.frag_size),
 			paint, 
 			scissor,
 			fringe,
@@ -1176,11 +1176,11 @@ render_fill :: proc(
 			-1,
 		)
 	} else {
-		call.uniform_offset = alloc_frag_uniforms(ctx, 1)
+		call.uniform_offset = __allocFragUniforms(ctx, 1)
 		// fill shader
-		convert_paint(
+		__convertPaint(
 			ctx,
-			frag_uniform_ptr(ctx, call.uniform_offset),
+			__fragUniformPtr(ctx, call.uniform_offset),
 			paint, 
 			scissor,
 			fringe,
@@ -1190,7 +1190,7 @@ render_fill :: proc(
 	}
 } 
 
-render_stroke :: proc(
+__renderStroke :: proc(
 	uptr: rawptr, 
 	paint: ^Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
@@ -1200,17 +1200,17 @@ render_stroke :: proc(
 	paths: []nvg.Path,
 ) {
 	ctx := cast(^Context) uptr
-	call := alloc_call(ctx)
+	call := __allocCall(ctx)
 
 	call.type = .Stroke
-	call.path_offset = alloc_paths(ctx, len(paths))
+	call.path_offset = __allocPaths(ctx, len(paths))
 	call.path_count = len(paths)
 	call.image = paint.image
-	call.blend_func = blend_composite_operation(composite_operation)
+	call.blend_func = __blendCompositeOperation(composite_operation)
 
 	// allocate vertices for all the paths
-	maxverts := max_vert_count(paths)
-	offset := alloc_verts(ctx, maxverts)
+	maxverts := __maxVertCount(paths)
+	offset := __allocVerts(ctx, maxverts)
 
 	for i in 0..<len(paths) {
 		copy := &ctx.paths[call.path_offset + i]
@@ -1227,11 +1227,11 @@ render_stroke :: proc(
 
 	if .Stencil_Strokes in ctx.flags {
 		// fill shader 
-		call.uniform_offset = alloc_frag_uniforms(ctx, 2)
+		call.uniform_offset = __allocFragUniforms(ctx, 2)
 
-		convert_paint(
+		__convertPaint(
 			ctx,
-			frag_uniform_ptr(ctx, call.uniform_offset),
+			__fragUniformPtr(ctx, call.uniform_offset),
 			paint,
 			scissor,
 			stroke_width,
@@ -1239,9 +1239,9 @@ render_stroke :: proc(
 			-1,
 		)
 
-		convert_paint(
+		__convertPaint(
 			ctx,
-			frag_uniform_ptr(ctx, call.uniform_offset + ctx.frag_size),
+			__fragUniformPtr(ctx, call.uniform_offset + ctx.frag_size),
 			paint,
 			scissor,
 			stroke_width,
@@ -1250,10 +1250,10 @@ render_stroke :: proc(
 		)
 	} else {
 		// fill shader
-		call.uniform_offset = alloc_frag_uniforms(ctx, 1)
-		convert_paint(
+		call.uniform_offset = __allocFragUniforms(ctx, 1)
+		__convertPaint(
 			ctx,
-			frag_uniform_ptr(ctx, call.uniform_offset),
+			__fragUniformPtr(ctx, call.uniform_offset),
 			paint,
 			scissor,
 			stroke_width,
@@ -1263,7 +1263,7 @@ render_stroke :: proc(
 	}
 }
 
-render_triangles :: proc(
+__renderTriangles :: proc(
 	uptr: rawptr, 
 	paint: ^Paint, 
 	composite_operation: nvg.Composite_Operation_State, 
@@ -1272,27 +1272,27 @@ render_triangles :: proc(
 	fringe: f32,
 ) {
 	ctx := cast(^Context) uptr
-	call := alloc_call(ctx)
+	call := __allocCall(ctx)
 
 	call.type = .Triangles
 	call.image = paint.image
-	call.blend_func = blend_composite_operation(composite_operation)
+	call.blend_func = __blendCompositeOperation(composite_operation)
 
 	// allocate the vertices for all the paths
-	call.triangle_offset = alloc_verts(ctx, len(verts))
+	call.triangle_offset = __allocVerts(ctx, len(verts))
 	call.triangle_count = len(verts)
 	mem.copy(&ctx.verts[call.triangle_offset], raw_data(verts), size_of(Vertex) * len(verts))
 
 	// fill shader
-	call.uniform_offset = alloc_frag_uniforms(ctx, 1)
-	frag := frag_uniform_ptr(ctx, call.uniform_offset)
-	convert_paint(ctx, frag, paint, scissor, 1, fringe, -1)
+	call.uniform_offset = __allocFragUniforms(ctx, 1)
+	frag := __fragUniformPtr(ctx, call.uniform_offset)
+	__convertPaint(ctx, frag, paint, scissor, 1, fringe, -1)
 	frag.type = .Img	
 }
 
-render_delete :: proc(uptr: rawptr) {
+__renderDelete :: proc(uptr: rawptr) {
 	ctx := cast(^Context) uptr
-	delete_shader(&ctx.shader)
+	__deleteShader(&ctx.shader)
 
 	when GL3 {
 		when GL_USE_UNIFORMBUFFER {
@@ -1328,27 +1328,27 @@ render_delete :: proc(uptr: rawptr) {
 // CREATION?
 ///////////////////////////////////////////////////////////
 
-create :: proc(flags: Create_Flags) -> ^nvg.Context {
+Create :: proc(flags: Create_Flags) -> ^nvg.Context {
 	ctx := new(Context)
 	params: nvg.Params
-	params.render_create = render_create
-	params.render_create_texture = render_create_texture
-	params.render_delete_texture = render_delete_texture
-	params.render_update_texture = render_update_texture
-	params.render_get_texture_size = render_get_texture_size
-	params.render_viewport = render_viewport
-	params.render_cancel = render_cancel
-	params.render_flush = render_flush
-	params.render_fill = render_fill
-	params.render_stroke = render_stroke
-	params.render_triangles = render_triangles
-	params.render_delete = render_delete
+	params.render_create = __renderCreate
+	params.render_create_texture = __renderCreateTexture
+	params.render_delete_texture = __renderDeleteTexture
+	params.render_update_texture = __renderUpdateTexture
+	params.render_get_texture_size = __renderGetTextureSize
+	params.render_viewport = __renderViewport
+	params.render_cancel = __renderCancel
+	params.render_flush = __renderFlush
+	params.render_fill = __renderFill
+	params.render_stroke = __renderStroke
+	params.render_triangles = __renderTriangles
+	params.render_delete = __renderDelete
 	params.user_ptr = ctx
 	params.edge_anti_alias = (.Anti_Alias in flags)
 	ctx.flags = flags
 	return nvg.CreateInternal(params)
 }
 
-destroy :: proc(ctx: ^nvg.Context) {
+Destroy :: proc(ctx: ^nvg.Context) {
 	nvg.DeleteInternal(ctx)
 }
