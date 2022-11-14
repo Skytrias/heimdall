@@ -306,6 +306,15 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 	h := INIT_FONTIMAGE_SIZE
 	fontstash.Init(&ctx.fs, w, h, .Top_Left)
 	assert(ctx.params.render_create_texture != nil)
+	ctx.fs.user_data = ctx
+	
+	// handle to the image needs to be set to the new generated texture
+	ctx.fs.callback_resize = proc(data: rawptr, w, h: int) {
+		ctx := cast(^Context) data
+		ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, ctx.fs.texture_data)
+	}
+	
+	// texture atlas
 	ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, nil)
 	ctx.font_image_idx = 0
 
@@ -2736,7 +2745,6 @@ FontFace :: proc(ctx: ^Context, font: string) {
 
 __quantize :: proc(a, d: f32) -> f32 {
 	return f32(int(a / d + 0.5)) * d
-	// return (a / d + 0.5) * d
 }
 
 __getFontScale :: proc(state: ^State) -> f32 {
