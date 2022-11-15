@@ -5,7 +5,7 @@ import "core:strings"
 import "core:fmt"
 import "core:math"
 import nvg "heimdall:nanovg"
-import nvg_gl "heimdall:nanovg_gl"
+import nvg_gl "heimdall:nanovg/gl"
 import gl "vendor:OpenGL"
 import glfw "vendor:glfw"
 import stbi "vendor:stb/image"
@@ -72,9 +72,9 @@ main :: proc() {
 	gl.load_up_to(3, 2, glfw.gl_set_proc_address)
 
 	when DEMO_MSAA {
-		ctx := nvg_gl.Create({ .Stencil_Strokes, .Debug })
+		ctx := nvg_gl.Create({ .STENCIL_STROKES, .DEBUG })
 	} else {
-		ctx := nvg_gl.Create({ .Anti_Alias, .Stencil_Strokes, .Debug })
+		ctx := nvg_gl.Create({ .ANTI_ALIAS, .STENCIL_STROKES, .DEBUG })
 	}
 	defer nvg_gl.Destroy(ctx)
 
@@ -151,24 +151,24 @@ drawWindow :: proc(ctx: ^nvg.Context, title: string, x, y, w, h: f32) {
 
 	// window
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.RoundedRect(ctx, x, y, w, h, corner_radius)
 		nvg.FillColor(ctx, nvg.RGBA(28, 30, 34, 192))
 	}
 
 	// drop shadow
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Rect(ctx, x - 10, y - 10, w + 20, h + 30)
 		nvg.RoundedRect(ctx, x, y, w, h, corner_radius)
-		nvg.PathSolidity(ctx, .Hole)
+		nvg.PathSolidity(ctx, .HOLE)
 		shadow_paint := nvg.BoxGradient(x, y + 2, w, h, corner_radius * 2, 10, nvg.RGBA(0, 0, 0, 128), nvg.RGBA(0, 0, 0, 0))
 		nvg.FillPaint(ctx, shadow_paint)
 	}
 
 	// header 1
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.RoundedRect(ctx, x + 1, y + 1, w - 2, 30, corner_radius - 1)
 		header_paint := nvg.LinearGradient(x, y, x, y + 15, nvg.RGBA(255, 255, 255, 8), nvg.RGBA(0, 0, 0, 8))
 		nvg.FillPaint(ctx, header_paint)
@@ -176,7 +176,7 @@ drawWindow :: proc(ctx: ^nvg.Context, title: string, x, y, w, h: f32) {
 
 	// header 2
 	{
-		nvg.BeginStroke(ctx)
+		nvg.StrokeScoped(ctx)
 		nvg.MoveTo(ctx, x + 0.5, y + 0.5 + 30)
 		nvg.LineTo(ctx, x + 0.5 + w - 1, y + 0.5 + 30)
 		nvg.StrokeColor(ctx, nvg.RGBA(0, 0, 0, 32))
@@ -185,8 +185,8 @@ drawWindow :: proc(ctx: ^nvg.Context, title: string, x, y, w, h: f32) {
 	// text
 	nvg.FontSize(ctx, 15)
 	nvg.FontFace(ctx, "sans-bold")
-	nvg.TextAlignHorizontal(ctx, .Middle)
-	nvg.TextAlignVertical(ctx, .Middle)
+	nvg.TextAlignHorizontal(ctx, .CENTER)
+	nvg.TextAlignVertical(ctx, .MIDDLE)
 
 	nvg.FontBlur(ctx, 2)
 	nvg.FillColor(ctx, nvg.RGBA(0, 0, 0, 128))
@@ -215,7 +215,7 @@ drawEyes :: proc(
 
 	{
 		bg := nvg.LinearGradient(x,y+h*0.5,x+w*0.1,y+h, nvg.RGBA(0,0,0,32), nvg.RGBA(0,0,0,16))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, lx+3.0,ly+16.0, ex,ey)
 		nvg.Ellipse(ctx, rx+3.0,ry+16.0, ex,ey)
 		nvg.FillPaint(ctx, bg)
@@ -223,7 +223,7 @@ drawEyes :: proc(
 
 	{
 		bg := nvg.LinearGradient(x,y+h*0.25,x+w*0.1,y+h, nvg.RGBA(220,220,220,255), nvg.RGBA(128,128,128,255))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, lx,ly, ex,ey)
 		nvg.Ellipse(ctx, rx,ry, ex,ey)
 		nvg.FillPaint(ctx, bg)
@@ -240,7 +240,7 @@ drawEyes :: proc(
 	dy *= ey*0.5
 
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, lx+dx,ly+dy+ey*0.25*(1-blink), br,br*blink)
 		nvg.FillColor(ctx, nvg.RGBA(32,32,32,255))
 	}
@@ -256,21 +256,21 @@ drawEyes :: proc(
 	dy *= ey*0.5
 	
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, rx+dx,ry+dy+ey*0.25*(1-blink), br,br*blink)
 		nvg.FillColor(ctx, nvg.RGBA(32,32,32,255))
 	}
 
 	{
 		gloss := nvg.RadialGradient(lx-ex*0.25,ly-ey*0.5, ex*0.1,ex*0.75, nvg.RGBA(255,255,255,128), nvg.RGBA(255,255,255,0))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, lx,ly, ex,ey)
 		nvg.FillPaint(ctx, gloss)
 	}
 
 	{
 		gloss := nvg.RadialGradient(rx-ex*0.25,ry-ey*0.5, ex*0.1,ex*0.75, nvg.RGBA(255,255,255,128), nvg.RGBA(255,255,255,0))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Ellipse(ctx, rx,ry, ex,ey)
 		nvg.FillPaint(ctx, gloss)
 	}
@@ -296,7 +296,7 @@ drawGraph :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	// Graph background
 	{
 		bg := nvg.LinearGradient(x,y,x,y+h, nvg.RGBA(0,160,192,0), nvg.RGBA(0,160,192,64))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.MoveTo(ctx, sx[0], sy[0])
 		for i in 1..<6 {
 			nvg.BezierTo(ctx, sx[i-1]+dx*0.5,sy[i-1], sx[i]-dx*0.5,sy[i], sx[i],sy[i])
@@ -308,7 +308,7 @@ drawGraph :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 
 	// Graph line
 	{
-		nvg.BeginStroke(ctx)
+		nvg.StrokeScoped(ctx)
 		nvg.MoveTo(ctx, sx[0], sy[0]+2)
 		for i in 1..<6 {
 			nvg.BezierTo(ctx, sx[i-1]+dx*0.5,sy[i-1]+2, sx[i]-dx*0.5,sy[i]+2, sx[i],sy[i]+2)
@@ -318,7 +318,7 @@ drawGraph :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	}
 
 	{
-		nvg.BeginStroke(ctx)
+		nvg.StrokeScoped(ctx)
 		nvg.MoveTo(ctx, sx[0], sy[0])
 		for i in 1..<6 {
 			nvg.BezierTo(ctx, sx[i-1]+dx*0.5,sy[i-1], sx[i]-dx*0.5,sy[i], sx[i],sy[i])
@@ -330,13 +330,13 @@ drawGraph :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	// Graph sample pos
 	for i in 0..<6 {
 		bg := nvg.RadialGradient(sx[i],sy[i]+2, 3.0,8.0, nvg.RGBA(0,0,0,32), nvg.RGBA(0,0,0,0))
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		nvg.Rect(ctx, sx[i]-10, sy[i]-10+2, 20,20)
 		nvg.FillPaint(ctx, bg)
 	}
 
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		for i in 0..<6 {
 			nvg.Circle(ctx, sx[i], sy[i], 4.0)
 		}
@@ -344,7 +344,7 @@ drawGraph :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	}
 
 	{
-		nvg.BeginFill(ctx)
+		nvg.FillScoped(ctx)
 		for i in 0..<6 {
 			nvg.Circle(ctx, sx[i], sy[i], 2.0)
 		}
@@ -370,8 +370,8 @@ drawColorwheel :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 		a0 := f32(i) / 6.0 * math.PI * 2.0 - aeps
 		a1 := f32(i+1.0) / 6.0 * math.PI * 2.0 + aeps
 		nvg.BeginPath(ctx)
-		nvg.Arc(ctx, cx,cy, r0, a0, a1, .Clockwise)
-		nvg.Arc(ctx, cx,cy, r1, a1, a0, .Counter_Clockwise)
+		nvg.Arc(ctx, cx,cy, r0, a0, a1, .CW)
+		nvg.Arc(ctx, cx,cy, r1, a1, a0, .CCW)
 		nvg.ClosePath(ctx)
 		ax = cx + math.cos(a0) * (r0+r1)*0.5
 		ay = cy + math.sin(a0) * (r0+r1)*0.5
@@ -405,7 +405,7 @@ drawColorwheel :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	nvg.BeginPath(ctx)
 	nvg.Rect(ctx, r0-2-10,-4-10,r1-r0+4+20,8+20)
 	nvg.Rect(ctx, r0-2,-4,r1-r0+4,8)
-	nvg.PathSolidity(ctx, .Hole)
+	nvg.PathSolidity(ctx, .HOLE)
 	nvg.FillPaint(ctx, paint)
 	nvg.Fill(ctx)
 
@@ -442,7 +442,7 @@ drawColorwheel :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	nvg.BeginPath(ctx)
 	nvg.Rect(ctx, ax-20,ay-20,40,40)
 	nvg.Circle(ctx, ax,ay,7)
-	nvg.PathSolidity(ctx, .Hole)
+	nvg.PathSolidity(ctx, .HOLE)
 	nvg.FillPaint(ctx, paint)
 	nvg.Fill(ctx)
 	
@@ -459,7 +459,7 @@ drawColorwheel :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	nvg.RoundedRect(ctx, ax - tw*0.5, ay -th*0.5, tw, th,5.0)
 	nvg.Fill(ctx)
 
-	nvg.TextAlign(ctx, .Middle, .Middle)
+	nvg.TextAlign(ctx, .CENTER, .MIDDLE)
 	nvg.FontSize(ctx, th)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGB(255,255,255))
@@ -476,8 +476,8 @@ drawLines :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 	s := w/9.0 - pad*2
 	pts: [4*2]f32
 	fx, fy: f32
-	joins := [3]nvg.Line_Cap { .Miter, .Round, .Bevel }
-	caps := [3]nvg.Line_Cap { .Butt, .Round, .Square }
+	joins := [3]nvg.LineCapType { .MITER, .ROUND, .BEVEL }
+	caps := [3]nvg.LineCapType { .BUTT, .ROUND, .SQUARE }
 
 	nvg.Save(ctx)
 	pts[0] = -s*0.25 + math.cos(t*0.3) * s*0.5
@@ -506,8 +506,8 @@ drawLines :: proc(ctx: ^nvg.Context, x, y, w, h, t: f32) {
 			nvg.LineTo(ctx, fx+pts[6], fy+pts[7])
 			nvg.Stroke(ctx)
 
-			nvg.LineCap(ctx, .Butt)
-			nvg.LineJoin(ctx, .Bevel)
+			nvg.LineCap(ctx, .BUTT)
+			nvg.LineJoin(ctx, .BEVEL)
 
 			nvg.StrokeWidth(ctx, 1.0)
 			nvg.StrokeColor(ctx, nvg.RGBA(0,192,255,255))
@@ -542,7 +542,7 @@ drawWidths :: proc(ctx: ^nvg.Context, x, y, width: f32) {
 }
 
 drawCaps :: proc(ctx: ^nvg.Context, x, y, width: f32) {
-	caps := [3]nvg.Line_Cap { .Butt, .Round, .Square }
+	caps := [3]nvg.LineCapType { .BUTT, .ROUND, .SQUARE }
 	line_width := f32(8.0)
 
 	nvg.Save(ctx)
@@ -637,19 +637,19 @@ drawSearchBox :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontSize(ctx, h*1.3)
 	nvg.FontFace(ctx, "icons")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,64))
-	nvg.TextAlign(ctx, .Middle, .Middle)
+	nvg.TextAlign(ctx, .CENTER, .MIDDLE)
 	nvg.TextIcon(ctx, x+h*0.55, y+h*0.55, rune(Icon.Search))
 
 	nvg.FontSize(ctx, 17.0)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,32))
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.Text(ctx, x+h*1.05,y+h*0.5,text)
 
 	nvg.FontSize(ctx, h*1.3)
 	nvg.FontFace(ctx, "icons")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,32))
-	nvg.TextAlign(ctx, .Middle, .Middle)
+	nvg.TextAlign(ctx, .CENTER, .MIDDLE)
 	nvg.TextIcon(ctx, x+w-h*0.55, y+h*0.55, rune(Icon.Circled_Cross))
 }
 
@@ -670,13 +670,13 @@ drawDropDown :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontSize(ctx, 17.0)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,160))
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.Text(ctx, x+h*0.3,y+h*0.5,text)
 
 	nvg.FontSize(ctx, h*1.3)
 	nvg.FontFace(ctx, "icons")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,64))
-	nvg.TextAlign(ctx, .Middle, .Middle)
+	nvg.TextAlign(ctx, .CENTER, .MIDDLE)
 	nvg.TextIcon(ctx, x+w-h*0.5, y+h*0.5, rune(Icon.Chevron_Right))
 }
 
@@ -685,7 +685,7 @@ drawLabel :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,128))
 
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.Text(ctx, x,y+h*0.5,text)
 }
 
@@ -710,7 +710,7 @@ drawEditBox :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontSize(ctx, 17.0)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,64))
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.Text(ctx, x+h*0.3,y+h*0.5,text)
 }
 
@@ -727,13 +727,13 @@ drawEditBoxNum :: proc(
 	nvg.FontSize(ctx, 15.0)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,64))
-	nvg.TextAlign(ctx, .Right, .Middle)
+	nvg.TextAlign(ctx, .RIGHT, .MIDDLE)
 	nvg.Text(ctx, x+w-h*0.3,y+h*0.5,units)
 
 	nvg.FontSize(ctx, 17.0)
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,128))
-	nvg.TextAlign(ctx, .Right, .Middle)
+	nvg.TextAlign(ctx, .RIGHT, .MIDDLE)
 	nvg.Text(ctx, x+w-uw-h*0.5,y+h*0.5,text)
 }
 
@@ -742,7 +742,7 @@ drawCheckBox :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontFace(ctx, "sans")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,160))
 
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.Text(ctx, x+28,y+h*0.5,text)
 
 	bg := nvg.BoxGradient(x+1,y+(h*0.5)-9+1, 18,18, 3,3, nvg.RGBA(0,0,0,32), nvg.RGBA(0,0,0,92))
@@ -754,7 +754,7 @@ drawCheckBox :: proc(ctx: ^nvg.Context, text: string, x, y, w, h: f32) {
 	nvg.FontSize(ctx, 33)
 	nvg.FontFace(ctx, "icons")
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,128))
-	nvg.TextAlign(ctx, .Middle, .Middle)
+	nvg.TextAlign(ctx, .CENTER, .MIDDLE)
 	nvg.TextIcon(ctx, x+9+2, y+h*0.5, rune(Icon.Check))
 }
 
@@ -802,13 +802,13 @@ drawButton :: proc(
 		nvg.FontSize(ctx, h*1.3)
 		nvg.FontFace(ctx, "icons")
 		nvg.FillColor(ctx, nvg.RGBA(255,255,255,96))
-		nvg.TextAlign(ctx, .Left, .Middle)
+		nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 		nvg.TextIcon(ctx, x+w*0.5-tw*0.5-iw*0.75, y+h*0.5, rune(preicon))
 	}
 
 	nvg.FontSize(ctx, 17.0)
 	nvg.FontFace(ctx, "sans-bold")
-	nvg.TextAlign(ctx, .Left, .Middle)
+	nvg.TextAlign(ctx, .LEFT, .MIDDLE)
 	nvg.FillColor(ctx, nvg.RGBA(0,0,0,160))
 	nvg.Text(ctx, x+w*0.5-tw*0.5+iw*0.25,y+h*0.5-1,text)
 	nvg.FillColor(ctx, nvg.RGBA(255,255,255,160))
@@ -833,7 +833,7 @@ drawSlider :: proc(ctx: ^nvg.Context, pos, x, y, w, h: f32) {
 	nvg.BeginPath(ctx)
 	nvg.Rect(ctx, x+math.round(pos*w)-kr-5,cy-kr-5,kr*2+5+5,kr*2+5+5+3)
 	nvg.Circle(ctx, x+math.round(pos*w),cy, kr)
-	nvg.PathSolidity(ctx, .Hole)
+	nvg.PathSolidity(ctx, .HOLE)
 	nvg.FillPaint(ctx, bg)
 	nvg.Fill(ctx)
 
@@ -863,8 +863,8 @@ drawSpinner :: proc(ctx: ^nvg.Context, cx, cy, r, t: f32) {
 	nvg.Save(ctx)
 
 	nvg.BeginPath(ctx)
-	nvg.Arc(ctx, cx,cy, r0, a0, a1, .Clockwise)
-	nvg.Arc(ctx, cx,cy, r1, a1, a0, .Counter_Clockwise)
+	nvg.Arc(ctx, cx,cy, r0, a0, a1, .CW)
+	nvg.Arc(ctx, cx,cy, r1, a1, a0, .CCW)
 	nvg.ClosePath(ctx)
 	ax := cx + math.cos(a0) * (r0+r1)*0.5
 	ay := cy + math.sin(a0) * (r0+r1)*0.5
@@ -897,7 +897,7 @@ drawThumbnails :: proc(
 	nvg.BeginPath(ctx)
 	nvg.Rect(ctx, x-10,y-10, w+20,h+30)
 	nvg.RoundedRect(ctx, x,y, w,h, cornerRadius)
-	nvg.PathSolidity(ctx, .Hole)
+	nvg.PathSolidity(ctx, .HOLE)
 	nvg.FillPaint(ctx, shadowPaint)
 	nvg.Fill(ctx)
 
@@ -952,7 +952,7 @@ drawThumbnails :: proc(
 		nvg.BeginPath(ctx)
 		nvg.Rect(ctx, tx-5,ty-5, thumb+10,thumb+10)
 		nvg.RoundedRect(ctx, tx,ty, thumb,thumb, 6)
-		nvg.PathSolidity(ctx, .Hole)
+		nvg.PathSolidity(ctx, .HOLE)
 		nvg.FillPaint(ctx, shadowPaint)
 		nvg.Fill(ctx)
 
@@ -1003,7 +1003,7 @@ drawParagraph :: proc(ctx: ^nvg.Context, x, y, width, height: f32, mx, my: f32) 
 
 	nvg.FontSize(ctx, 15.0)
 	nvg.FontFace(ctx, "sans")
-	nvg.TextAlign(ctx, .Left, .Top)
+	nvg.TextAlign(ctx, .LEFT, .TOP)
 	_, _, lineh := nvg.TextMetrics(ctx)
 
 	// The text break API can be used to fill a large buffer of rows,
@@ -1069,7 +1069,7 @@ drawParagraph :: proc(ctx: ^nvg.Context, x, y, width, height: f32, mx, my: f32) 
 	if false {
 		txt := fmt.tprintf("%d", gutter)
 		nvg.FontSize(ctx, 12.0)
-		nvg.TextAlign(ctx, .Right, .Middle)
+		nvg.TextAlign(ctx, .RIGHT, .MIDDLE)
 
 		nvg.TextBounds(ctx, gx,gy, txt, &bounds)
 
@@ -1092,7 +1092,7 @@ drawParagraph :: proc(ctx: ^nvg.Context, x, y, width, height: f32, mx, my: f32) 
 	y += 20.0
 
 	nvg.FontSize(ctx, 11.0)
-	nvg.TextAlign(ctx, .Left, .Top)
+	nvg.TextAlign(ctx, .LEFT, .TOP)
 	nvg.TextLineHeight(ctx, 1.2)
 
 	nvg.TextBoxBounds(ctx, x,y, 150, hoverText, &bounds)
@@ -1434,7 +1434,7 @@ renderGraph :: proc(ctx: ^nvg.Context, x, y: f32, fps: ^PerfGraph) {
 
 	if fps.name != "" {
 		nvg.FontSize(ctx, 12.0)
-		nvg.TextAlign(ctx, .Left, .Top)
+		nvg.TextAlign(ctx, .LEFT, .TOP)
 		nvg.FillColor(ctx, nvg.RGBA(240,240,240,192))
 		nvg.Text(ctx, x+3,y+3, fps.name)
 	}
@@ -1442,13 +1442,13 @@ renderGraph :: proc(ctx: ^nvg.Context, x, y: f32, fps: ^PerfGraph) {
 	switch fps.style {
 		case .FPS: {
 			nvg.FontSize(ctx, 15.0)
-			nvg.TextAlign(ctx, .Right, .Top)
+			nvg.TextAlign(ctx, .RIGHT, .TOP)
 			nvg.FillColor(ctx, nvg.RGBA(240,240,240,255))
 			str := fmt.tprintf("%.2f FPS", 1.0 / avg)
 			nvg.Text(ctx, x+w-3,y+3, str)
 
 			nvg.FontSize(ctx, 13.0)
-			nvg.TextAlign(ctx, .Right, .Baseline)
+			nvg.TextAlign(ctx, .RIGHT, .BASELINE)
 			nvg.FillColor(ctx, nvg.RGBA(240,240,240,160))
 			str = fmt.tprintf("%.2f ms", avg * 1000.0)
 			nvg.Text(ctx, x+w-3,y+h-3, str)
@@ -1456,7 +1456,7 @@ renderGraph :: proc(ctx: ^nvg.Context, x, y: f32, fps: ^PerfGraph) {
 
 		case .PERCENT: {
 			nvg.FontSize(ctx, 15.0)
-			nvg.TextAlign(ctx, .Right, .Top)
+			nvg.TextAlign(ctx, .RIGHT, .TOP)
 			nvg.FillColor(ctx, nvg.RGBA(240,240,240,255))
 			str := fmt.tprintf("%.1f %%", avg * 1.0)
 			nvg.Text(ctx, x+w-3,y+3, str)
@@ -1464,7 +1464,7 @@ renderGraph :: proc(ctx: ^nvg.Context, x, y: f32, fps: ^PerfGraph) {
 		
 		case .MS: {
 			nvg.FontSize(ctx, 15.0)
-			nvg.TextAlign(ctx, .Right, .Top)
+			nvg.TextAlign(ctx, .RIGHT, .TOP)
 			nvg.FillColor(ctx, nvg.RGBA(240,240,240,255))
 			str := fmt.tprintf("%.2f ms", avg * 1000.0)
 			nvg.Text(ctx, x+w-3,y+3, str)
