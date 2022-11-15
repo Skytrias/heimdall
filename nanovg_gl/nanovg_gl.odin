@@ -1,5 +1,6 @@
 package nanovg_gl
 
+import "core:log"
 import "core:strings"
 import "core:mem"
 import "core:math"
@@ -128,8 +129,6 @@ when GL2_IMPLEMENTATION {
 		type: Shader_Type,
 	}
 }
-
-// TODO maybe find a better way to do this
 
 GL2_IMPLEMENTATION :: false
 GL3_IMPLEMENTATION :: true
@@ -274,7 +273,6 @@ __allocTexture :: proc(ctx: ^Context) -> (tex: ^Texture) {
 	return
 }
 
-// TODO could use or_return
 __findTexture :: proc(ctx: ^Context, id: int) -> ^Texture {
 	for texture in &ctx.textures {
 		if texture.id == id {
@@ -401,28 +399,27 @@ __renderCreateTexture :: proc(
 ) -> int {
 	ctx := cast(^Context) uptr
 	tex := __allocTexture(ctx)
+	image_flags := image_flags
 
 	if tex == nil {
 		return 0
 	}
 
-	// TODO
-	// when GLES2 {
-	// 	// if __nearestPow2(w) != u32(w) || __nearestPow2(h) != u32(h) {
+	when GLES2 {
+		if __nearestPow2(uint(w)) != uint(w) || __nearestPow2(uint(h)) != uint(h) {
+			// No repeat
+			if (.Repeat_X in image_flags) || (.Repeat_Y in image_flags) {
+				log.errorf("Repeat X/Y is not supported for non power-of-two textures (%d x %d)\n", w, h)
+				excl(&image_flags, Image_Flags { .Repeat_X, .Repeat_Y })
+			}
 
-	// 	// }
-
-	// 			// No repeat
-	// 	if ((imageFlags & NVG_IMAGE_REPEATX) != 0 || (imageFlags & NVG_IMAGE_REPEATY) != 0) {
-	// 		printf("Repeat X/Y is not supported for non power-of-two textures (%d x %d)\n", w, h);
-	// 		imageFlags &= ~(NVG_IMAGE_REPEATX | NVG_IMAGE_REPEATY);
-	// 	}
-	// 	// No mips.
-	// 	if (imageFlags & NVG_IMAGE_GENERATE_MIPMAPS) {
-	// 		printf("Mip-maps is not support for non power-of-two textures (%d x %d)\n", w, h);
-	// 		imageFlags &= ~NVG_IMAGE_GENERATE_MIPMAPS;
-	// 	}
-	// }
+			// No mips.
+			if .Generate_Mipmaps in image_flags {
+				log.errorf("Mip-maps is not support for non power-of-two textures (%d x %d)\n", w, h);
+				excl(&image_flags, nvg.Image_Flag.Generate_Mipmaps)
+			}
+		}
+	}
 
 	gl.GenTextures(1, &tex.tex)
 	tex.width = w
@@ -441,8 +438,7 @@ __renderCreateTexture :: proc(
 
 	when GL2 {
 		if .Generate_Mipmaps in image_flags {
-			// TODO missing in odin
-			// gl.TexParameteri(gl.TEXTURE_2D, gl.GENERATE_MIPMAP, gl.TRUE)
+			gl.TexParameteri(gl.TEXTURE_2D, GENERATE_MIPMAP, 1)
 		}
 	}
 
@@ -451,7 +447,7 @@ __renderCreateTexture :: proc(
 	} else {
 		when GLES2 || GL2 {
 			// TODO missing in odin
-			// gl.TexImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, w, h, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data)
+			gl.TexImage2D(gl.TEXTURE_2D, 0, gl.LUMINANCE, w, h, 0, gl.LUMINANCE, gl.UNSIGNED_BYTE, data)
 		} else when GLES3 {
 			gl.TexImage2D(gl.TEXTURE_2D, 0, gl.R8, i32(w), i32(h), 0, gl.RED, gl.UNSIGNED_BYTE, raw_data(data))
 		} else {
@@ -517,7 +513,7 @@ __checkError :: proc(ctx: ^Context, str: string) {
 		err := gl.GetError()
 
 		if err != gl.NO_ERROR {
-			fmt.printf("FOUND ERROR %08x:\n\t%s\n", err, str)
+			log.errorf("FOUND ERROR %08x:\n\t%s\n", err, str)
 		}
 	}
 }
@@ -533,8 +529,7 @@ __checkProgramError :: proc(prog: u32) {
 		defer delete(temp)
 
 		gl.GetProgramInfoLog(prog, length, nil, raw_data(temp))
-		// fmt.eprintln("LENGTH", length)
-		fmt.printf("Program Error:\n%s\n", string(temp[:length]))
+		log.errorf("Program Error:\n%s\n", string(temp[:length]))
 	}
 }
 
@@ -549,9 +544,7 @@ __checkShaderError :: proc(shader: u32, type: string) {
 		defer delete(temp)
 
 		gl.GetShaderInfoLog(shader, length, nil, raw_data(temp))
-
-		// fmt.eprintln("LENGTH", length)
-		fmt.printf("Shader error:\n%s\n", string(temp[:length]))	
+		log.errorf("Shader error:\n%s\n", string(temp[:length]))	
 	}
 }
 

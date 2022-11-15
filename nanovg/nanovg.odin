@@ -203,6 +203,9 @@ Context :: struct {
 	fill_tri_count: int,
 	stroke_tri_count: int,
 	text_tri_count: int,
+
+	// flush texture
+	texture_dirty: bool,
 }
 
 Params :: struct {
@@ -377,8 +380,14 @@ CancelFrame :: proc(ctx: ^Context) {
 
 // Ends drawing flushing remaining render state.
 EndFrame :: proc(ctx: ^Context) {
+	// flush texture only once
+	if ctx.texture_dirty {
+		__flushTextTexture(ctx)
+		ctx.texture_dirty = false
+	}
+
 	assert(ctx.params.render_flush != nil)
-	ctx.params.render_flush(ctx.params.user_ptr)	
+	ctx.params.render_flush(ctx.params.user_ptr)
 
 	// delete textures with invalid size
 	if ctx.font_image_idx != 0 {
@@ -2755,6 +2764,7 @@ __flushTextTexture :: proc(ctx: ^Context) {
 	dirty: [4]f32
 	assert(ctx.params.render_update_texture != nil)
 
+
 	if fontstash.ValidateTexture(&ctx.fs, &dirty) {
 		font_image := ctx.font_images[ctx.font_image_idx]
 		
@@ -2904,7 +2914,7 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 		verts[4] = { c[6], c[7], q.s0, q.t1 }
 		verts[5] = { c[4], c[5], q.s1, q.t1 }
 
-		__flushTextTexture(ctx)
+		ctx.texture_dirty = true
 		__renderText(ctx, verts[:])
 	}
 
@@ -2988,8 +2998,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 		}
 	}
 
-	// TODO: add back-end bit to do this just once per frame.
-	__flushTextTexture(ctx)
+	ctx.texture_dirty = true
 	__renderText(ctx, verts[:nverts])
 
 	return iter.nextx / scale
