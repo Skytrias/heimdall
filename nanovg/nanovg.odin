@@ -499,6 +499,19 @@ HSLA :: proc(h, s, l: f32, a: u8) -> (col: Color) {
 	return
 }
 
+// hex to 0xAARRGGBB color
+ColorHex :: proc(color: u32) -> (res: Color) {
+	color := color
+	res.b = f32(0x000000FF & color) / 255
+	color = color >> 8
+	res.g = f32(0x000000FF & color) / 255
+	color = color >> 8
+	res.r = f32(0x000000FF & color) / 255
+	color = color >> 8
+	res.a = f32(0x000000FF & color) / 255
+	return
+}
+
 ///////////////////////////////////////////////////////////
 // TRANSFORMS
 //
@@ -2845,6 +2858,7 @@ __isTransformFlipped :: proc(xform: []f32) -> bool {
 TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
+	invscale := f32(1.0) / scale
 	is_flipped := __isTransformFlipped(state.xform[:])
 
 	if state.font_id == -1 {
@@ -2884,8 +2898,8 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 
 	// align vertically
 	y = math.round(y + fontstash.__getVerticalAlign(fs, font, fstate.av, isize))
-	nextx := f32(0)
-	nexty := f32(0)
+	nextx := f32(x)
+	nexty := f32(y)
 
 	if glyph != nil {
 		q: fontstash.Quad
@@ -2901,10 +2915,10 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 		c: [4 * 2]f32
 	
 		// Transform corners.
-		TransformPoint(&c[0], &c[1], state.xform, q.x0 + x, q.y0 + y)
-		TransformPoint(&c[2], &c[3], state.xform, q.x1 + x, q.y0 + y)
-		TransformPoint(&c[4], &c[5], state.xform, q.x1 + x, q.y1 + y)
-		TransformPoint(&c[6], &c[7], state.xform, q.x0 + x, q.y1 + y)
+		TransformPoint(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
+		TransformPoint(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
+		TransformPoint(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
+		TransformPoint(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
 		
 		// Create triangles
 		verts[0] = { c[0], c[1], q.s0, q.t0 }
@@ -2918,13 +2932,14 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 		__renderText(ctx, verts[:])
 	}
 
-	return nextx + x
+	return nextx / scale
 }
 
 // Draws text string at specified location. If end is specified only the sub-string up to the end is drawn.
 Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	state := __getState(ctx)
 	scale := __getFontScale(state) * ctx.device_px_ratio
+	invscale := f32(1.0) / scale
 	is_flipped := __isTransformFlipped(state.xform[:])
 
 	if state.font_id == -1 {
@@ -2943,7 +2958,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	verts := __allocTempVerts(ctx, cverts)
 	nverts: int
 
-	iter := fontstash.TextIterInit(fs, 0, 0, text)
+	iter := fontstash.TextIterInit(fs, x * scale, y * scale, text)
 	prev_iter := iter
 	q: fontstash.Quad
 	for fontstash.TextIterNext(&ctx.fs, &iter, &q) {
@@ -2975,10 +2990,10 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 		}
 
 		// Transform corners.
-		TransformPoint(&c[0], &c[1], state.xform, q.x0 + x, q.y0 + y)
-		TransformPoint(&c[2], &c[3], state.xform, q.x1 + x, q.y0 + y)
-		TransformPoint(&c[4], &c[5], state.xform, q.x1 + x, q.y1 + y)
-		TransformPoint(&c[6], &c[7], state.xform, q.x0 + x, q.y1 + y)
+		TransformPoint(&c[0], &c[1], state.xform, q.x0 * invscale, q.y0 * invscale)
+		TransformPoint(&c[2], &c[3], state.xform, q.x1 * invscale, q.y0 * invscale)
+		TransformPoint(&c[4], &c[5], state.xform, q.x1 * invscale, q.y1 * invscale)
+		TransformPoint(&c[6], &c[7], state.xform, q.x0 * invscale, q.y1 * invscale)
 		
 		// Create triangles
 		if nverts + 6 <= cverts {
@@ -2995,7 +3010,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	ctx.texture_dirty = true
 	__renderText(ctx, verts[:nverts])
 
-	return iter.nextx + x
+	return iter.nextx / scale
 }
 
 // Returns the vertical metrics based on the current text style.
@@ -3050,18 +3065,18 @@ TextBounds :: proc(
 	fontstash.SetAlignVertical(fs, state.align_vertical)
 	fontstash.SetFont(fs, state.font_id)
 
-	width := fontstash.TextBounds(fs, input, 0, 0, bounds)
+	width := fontstash.TextBounds(fs, input, x * scale, y * scale, bounds)
 	
 	// Use line bounds for height.
-	one, two := fontstash.LineBounds(fs, 0)
+	one, two := fontstash.LineBounds(fs, y * scale)
 
 	if bounds != nil {
 		bounds[1] = one
 		bounds[3] = two
-		bounds[0] += x
-		bounds[1] += y
-		bounds[2] += x
-		bounds[3] += y
+		bounds[0] *= invscale
+		bounds[1] *= invscale
+		bounds[2] *= invscale
+		bounds[3] *= invscale
 	}
 
 	return width * invscale
@@ -3364,7 +3379,6 @@ TextBoxBounds :: proc(
 	rows: [2]Text_Row
 	scale := __getFontScale(state) * ctx.device_px_ratio
 	invscale := f32(1.0) / scale
-	yoff: f32
 
 	if state.font_id == -1 {
 		if bounds != nil {
@@ -3382,7 +3396,8 @@ TextBoxBounds :: proc(
 	state.align_horizontal = .Left
 
 	_, _, lineh := TextMetrics(ctx)
-	minx, maxx, miny, maxy: f32
+	minx, maxx := x, x
+	miny, maxy := y, y
 
 	fs := &ctx.fs
 	fontstash.SetSize(fs, state.font_size * scale)
@@ -3411,20 +3426,20 @@ TextBoxBounds :: proc(
 				case .Right: dx = breakRowWidth - row.width
 			}
 
-			rminx = row.minx + dx
-			rmaxx = row.maxx + dx
+			rminx = x + row.minx + dx
+			rmaxx = x + row.maxx + dx
 			minx = min(minx, rminx)
 			maxx = max(maxx, rmaxx)
 			// Vertical bounds.
-			miny = min(miny, yoff + rminy)
-			maxy = max(maxy, yoff + rmaxy)
+			miny = min(miny, y + rminy)
+			maxy = max(maxy, y + rmaxy)
 
-			yoff += lineh * state.line_height
+			y += lineh * state.line_height
 		}
 	}
 
 	if bounds != nil {
-		bounds^ = { minx + x, miny + y, maxx + x, maxy + y }
+		bounds^ = { minx, miny, maxx, maxy }
 	}
 }
 
