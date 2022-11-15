@@ -10,8 +10,8 @@ import "core:fmt"
 import "../fontstash"
 import stbi "vendor:stb/image"
 
-Align_Vertical :: fontstash.Align_Vertical
-Align_Horizontal :: fontstash.Align_Horizontal
+AlignVertical :: fontstash.AlignVertical
+AlignHorizontal :: fontstash.AlignHorizontal
 
 INIT_FONTIMAGE_SIZE :: 512
 MAX_FONTIMAGE_SIZE :: 2048
@@ -26,18 +26,18 @@ KAPPA :: 0.5522847493
 
 Color :: [4]f32
 Matrix :: [6]f32
-// Rect :: [4]f32
+Vertex :: [4]f32 // x,y,u,v
 
-Image_Flag :: enum {
-	Generate_Mipmaps,
-	Repeat_X,
-	Repeat_Y,
-	Flip_Y,
-	Premultiplied,
-	Nearest,
-	No_Delete,
+ImageFlag :: enum {
+	GENERATE_MIPMAPS,
+	REPEAT_X,
+	REPEAT_Y,
+	FLIP_Y,
+	PREMULTIPLIED,
+	NEAREST,
+	NO_DELETE,
 }
-Image_Flags :: bit_set[Image_Flag]
+ImageFlags :: bit_set[ImageFlag]
 
 Paint :: struct {
 	xform: Matrix,
@@ -50,24 +50,24 @@ Paint :: struct {
 }
 
 Winding :: enum {
-	Counter_Clockwise = 1,
-	Clockwise,
+	CCW = 1,
+	CW,
 }
 
 Solidity :: enum {
-	Solid = 1, // CCW
-	Hole, // CW
+	SOLID = 1, // CCW
+	HOLE, // CW
 }
 
-Line_Cap :: enum {
-	Butt,
-	Round,
-	Square,
-	Bevel,
-	Miter,
+LineCapType :: enum {
+	BUTT,
+	ROUND,
+	SQUARE,
+	BEVEL,
+	MITER,
 }
 
-Blend_Factor :: enum {
+BlendFactor :: enum {
 	ZERO,
 	ONE,
 	SRC_COLOR,
@@ -81,7 +81,7 @@ Blend_Factor :: enum {
 	SRC_ALPHA_SATURATE,
 }
 
-Composite_Operation :: enum {
+CompositeOperation :: enum {
 	SOURCE_OVER,
 	SOURCE_IN,
 	SOURCE_OUT,
@@ -95,52 +95,50 @@ Composite_Operation :: enum {
 	XOR,
 }
 
-Composite_Operation_State :: struct {
-	src_RGB: Blend_Factor,
-	dst_RGB: Blend_Factor,
-	src_alpha: Blend_Factor,
-	dst_alpha: Blend_Factor,
+CompositeOperationState :: struct {
+	src_RGB: BlendFactor,
+	dst_RGB: BlendFactor,
+	src_alpha: BlendFactor,
+	dst_alpha: BlendFactor,
 }
 
 // render data structures
 
-Vertex :: [4]f32 // x,y,u,v
-
-Texture_Type :: enum {
+Texture :: enum {
 	Alpha,
 	RGBA,
 }
 
-scissor :: struct {
+ScissorT :: struct {
 	xform: Matrix,
 	extent: [2]f32,
 }
 
 Command :: enum {
-	Move_To,
-	Line_To,
-	Bezier_To,
-	Close,
-	Winding,
+	MOVE_TO,
+	LINE_TO,
+	BEZIER_TO,
+	CLOSE,
+	WINDING,
 }
 
-Point_Flag :: enum {
-	Corner,
-	Left,
-	Bevel,
-	Inner_Bevel,
+PointFlag :: enum {
+	CORNER,
+	LEFT,
+	BEVEL,
+	INNER_BEVEL,
 }
-Point_Flags :: bit_set[Point_Flag]
+PointFlags :: bit_set[PointFlag]
 
 Point :: struct {
 	x, y: f32,
 	dx, dy: f32,
 	len: f32,
 	dmx, dmy: f32,
-	flags: Point_Flags,
+	flags: PointFlags,
 }
 
-Path_Cache :: struct {
+PathCache :: struct {
 	points: [dynamic]Point,
 	paths: [dynamic]Path,
 	verts: [dynamic]Vertex,
@@ -159,25 +157,25 @@ Path :: struct {
 }
 
 State :: struct {
-	composite_operation: Composite_Operation_State,
+	composite_operation: CompositeOperationState,
 	shape_anti_alias: bool,
 	fill: Paint,
 	stroke: Paint,
 	stroke_width: f32,
 	miter_limit: f32,
-	line_join: Line_Cap,
-	line_cap: Line_Cap,
+	line_join: LineCapType,
+	line_cap: LineCapType,
 	alpha: f32,
 	xform: Matrix,
-	scissor: scissor,
+	scissor: ScissorT,
 
 	// font state
 	font_size: f32,
 	letter_spacing: f32,
 	line_height: f32,
 	font_blur: f32,
-	align_horizontal: Align_Horizontal,
-	align_vertical: Align_Vertical,
+	align_horizontal: AlignHorizontal,
+	align_vertical: AlignVertical,
 	font_id: int,
 }
 
@@ -187,14 +185,14 @@ Context :: struct {
 	command_x, command_y: f32,
 	states: [MAX_STATES]State,
 	state_count: int,
-	cache: Path_Cache,
+	cache: PathCache,
 	tess_tol: f32,
 	dist_tol: f32,
 	fringe_width: f32,
 	device_px_ratio: f32,
 
 	// font
-	fs: fontstash.Font_Context,
+	fs: fontstash.FontContext,
 	font_images: [MAX_FONTIMAGES]int,
 	font_image_idx: int,
 
@@ -219,9 +217,9 @@ Params :: struct {
 	// textures calls
 	render_create_texture: proc(
 		uptr: rawptr, 
-		type: Texture_Type,
+		type: Texture,
 		w, h: int, 
-		image_flags: Image_Flags, 
+		image_flags: ImageFlags, 
 		data: []byte,
 	) -> int,
 	render_delete_texture: proc(uptr: rawptr, image: int) -> bool,
@@ -241,8 +239,8 @@ Params :: struct {
 	render_fill: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: Composite_Operation_State, 
-		scissor: ^scissor,
+		composite_operation: CompositeOperationState, 
+		scissor: ^ScissorT,
 		fringe: f32,
 		bounds: [4]f32,
 		paths: []Path,
@@ -250,8 +248,8 @@ Params :: struct {
 	render_stroke: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: Composite_Operation_State, 
-		scissor: ^scissor,
+		composite_operation: CompositeOperationState, 
+		scissor: ^ScissorT,
 		fringe: f32,
 		stroke_width: f32,
 		paths: []Path,
@@ -259,20 +257,20 @@ Params :: struct {
 	render_triangles: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: Composite_Operation_State, 
-		scissor: ^scissor,
+		composite_operation: CompositeOperationState, 
+		scissor: ^ScissorT,
 		verts: []Vertex,
 		fringe: f32,
 	),
 }
 
-__allocPathCache :: proc(c: ^Path_Cache) {
+__allocPathCache :: proc(c: ^PathCache) {
 	c.points = make([dynamic]Point, 0, INIT_POINTS_SIZE)
 	c.paths = make([dynamic]Path, 0, INIT_PATH_SIZE)
 	c.verts = make([dynamic]Vertex, 0, INIT_VERTS_SIZE)
 }
 
-__deletePathCache :: proc(c: Path_Cache) {
+__deletePathCache :: proc(c: PathCache) {
 	delete(c.points)
 	delete(c.paths)
 	delete(c.verts)
@@ -307,7 +305,7 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 
 	w := INIT_FONTIMAGE_SIZE
 	h := INIT_FONTIMAGE_SIZE
-	fontstash.Init(&ctx.fs, w, h, .Top_Left)
+	fontstash.Init(&ctx.fs, w, h, .TOPLEFT)
 	assert(ctx.params.render_create_texture != nil)
 	ctx.fs.user_data = ctx
 	
@@ -712,8 +710,8 @@ Reset :: proc(ctx: ^Context) {
 	state.shape_anti_alias = true
 	state.stroke_width = 1
 	state.miter_limit = 10
-	state.line_cap = .Butt
-	state.line_join = .Miter
+	state.line_cap = .BUTT
+	state.line_join = .MITER
 	state.alpha = 1
 	TransformIdentity(&state.xform)
 
@@ -725,8 +723,8 @@ Reset :: proc(ctx: ^Context) {
 	state.letter_spacing = 0
 	state.line_height = 1
 	state.font_blur = 0
-	state.align_horizontal = .Left
-	state.align_vertical = .Baseline
+	state.align_horizontal = .LEFT
+	state.align_vertical = .BASELINE
 	state.font_id = 0
 }
 
@@ -755,14 +753,14 @@ MiterLimit :: proc(ctx: ^Context, limit: f32) {
 
 // Sets how the end of the line (cap) is drawn,
 // Can be one of: NVG_BUTT (default), NVG_ROUND, NVG_SQUARE.
-LineCap :: proc(ctx: ^Context, cap: Line_Cap) {
+LineCap :: proc(ctx: ^Context, cap: LineCapType) {
 	state := __getState(ctx)
 	state.line_cap = cap
 }
 
 // Sets how sharp path corners are drawn.
 // Can be one of NVG_MITER (default), NVG_ROUND, NVG_BEVEL.
-LineJoin :: proc(ctx: ^Context, join: Line_Cap) {
+LineJoin :: proc(ctx: ^Context, join: LineCapType) {
 	state := __getState(ctx)
 	state.line_join = join
 }
@@ -894,7 +892,7 @@ CurrentTransform :: proc(ctx: ^Context, xform: ^Matrix) {
 
 // Creates image by loading it from the disk from specified file name.
 // Returns handle to the image.
-CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: Image_Flags) -> int {
+CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: ImageFlags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -912,7 +910,7 @@ CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: Image_Fla
 
 // Creates image by loading it from the specified chunk of memory.
 // Returns handle to the image.
-CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: Image_Flags) -> int {
+CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: ImageFlags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -932,7 +930,7 @@ CreateImage :: proc { CreateImagePath, CreateImageMem }
 
 // Creates image from specified image data.
 // Returns handle to the image.
-CreateImageRGBA :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, data: []byte) -> int {
+CreateImageRGBA :: proc(ctx: ^Context, w, h: int, image_flags: ImageFlags, data: []byte) -> int {
 	assert(ctx.params.render_create_texture != nil)
 	return ctx.params.render_create_texture(
 		ctx.params.user_ptr,
@@ -1200,7 +1198,7 @@ ResetScissor :: proc(ctx: ^Context) {
 ///////////////////////////////////////////////////////////
 
 // state table instead of if else chains
-OP_STATE_TABLE :: [Composite_Operation][2]Blend_Factor {
+OP_STATE_TABLE :: [CompositeOperation][2]BlendFactor {
 	.SOURCE_OVER = { .ONE, .ONE_MINUS_SRC_ALPHA	},
 	.SOURCE_IN = { .DST_ALPHA, .ZERO },
 	.SOURCE_OUT = { .ONE_MINUS_DST_ALPHA, .ZERO },
@@ -1216,7 +1214,7 @@ OP_STATE_TABLE :: [Composite_Operation][2]Blend_Factor {
 	.XOR = { .ONE_MINUS_DST_ALPHA, .ONE_MINUS_SRC_ALPHA },
 }
 
-__compositeOperationState :: proc(op: Composite_Operation) -> (res: Composite_Operation_State) {
+__compositeOperationState :: proc(op: CompositeOperation) -> (res: CompositeOperationState) {
 	table := OP_STATE_TABLE
 	factors := table[op]
 	res.src_RGB = factors.x
@@ -1227,25 +1225,25 @@ __compositeOperationState :: proc(op: Composite_Operation) -> (res: Composite_Op
 }
 
 // Sets the composite operation. The op parameter should be one of NVGcompositeOperation.
-GlobalCompositeOperation :: proc(ctx: ^Context, op: Composite_Operation) {
+GlobalCompositeOperation :: proc(ctx: ^Context, op: CompositeOperation) {
 	state := __getState(ctx)
 	state.composite_operation = __compositeOperationState(op)
 }
 
 // Sets the composite operation with custom pixel arithmetic. The parameters should be one of NVGblendFactor.
-GlobalCompositeBlendFunc :: proc(ctx: ^Context, sfactor, dfactor: Blend_Factor) {
+GlobalCompositeBlendFunc :: proc(ctx: ^Context, sfactor, dfactor: BlendFactor) {
 	GlobalCompositeBlendFuncSeparate(ctx, sfactor, dfactor, sfactor, dfactor)
 }
 
 // Sets the composite operation with custom pixel arithmetic for RGB and alpha components separately. The parameters should be one of NVGblendFactor.
 GlobalCompositeBlendFuncSeparate :: proc(
 	ctx: ^Context,
-	src_RGB: Blend_Factor,
-	dst_RGB: Blend_Factor,
-	src_alpha: Blend_Factor,
-	dst_alpha: Blend_Factor,
+	src_RGB: BlendFactor,
+	dst_RGB: BlendFactor,
+	src_alpha: BlendFactor,
+	dst_alpha: BlendFactor,
 ) {
-	op := Composite_Operation_State {
+	op := CompositeOperationState {
 		src_RGB,
 		dst_RGB,
 		src_alpha,
@@ -1295,7 +1293,7 @@ __distPtSeg :: proc(x, y, px, py, qx, qy: f32) -> f32 {
 __appendCommands :: proc(ctx: ^Context, values: []f32) {
 	state := __getState(ctx)
 
-	if Command(values[0]) != .Close && Command(values[0]) != .Winding {
+	if Command(values[0]) != .CLOSE && Command(values[0]) != .WINDING {
 		ctx.command_x = values[len(values) - 2]
 		ctx.command_y = values[len(values) - 1]
 	}
@@ -1305,23 +1303,23 @@ __appendCommands :: proc(ctx: ^Context, values: []f32) {
 		cmd := Command(values[i])
 
 		switch cmd {
-			case .Move_To, .Line_To: {
+			case .MOVE_TO, .LINE_TO: {
 				TransformPoint(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
 				i += 3
 			}
 
-			case .Bezier_To: {
+			case .BEZIER_TO: {
 				TransformPoint(&values[i + 1], &values[i + 2], state.xform, values[i + 1], values[i + 2])
 				TransformPoint(&values[i + 3], &values[i + 4], state.xform, values[i + 3], values[i + 4])
 				TransformPoint(&values[i + 5], &values[i + 6], state.xform, values[i + 5], values[i + 6])
 				i += 7
 			}
 
-			case .Close: {
+			case .CLOSE: {
 				i += 1
 			}
 
-			case .Winding: {
+			case .WINDING: {
 				i += 2
 			}
 
@@ -1352,7 +1350,7 @@ __lastPath :: proc(ctx: ^Context) -> ^Path {
 __addPath :: proc(ctx: ^Context) {
 	append(&ctx.cache.paths, Path {
 		first = len(ctx.cache.points),
-		winding = .Counter_Clockwise,
+		winding = .CCW,
 	})
 }
 
@@ -1364,7 +1362,7 @@ __lastPoint :: proc(ctx: ^Context) -> ^Point {
 	return nil
 }
 
-__addPoint :: proc(ctx: ^Context, x, y: f32, flags: Point_Flags) {
+__addPoint :: proc(ctx: ^Context, x, y: f32, flags: PointFlags) {
 	path := __lastPath(ctx)
 
 	if path == nil {
@@ -1466,7 +1464,7 @@ __tesselateBezier :: proc(
 	x3, y3: f32,
 	x4, y4: f32,
 	level: int,
-	flags: Point_Flags,
+	flags: PointFlags,
 ) {
 	if level > 10 {
 		return
@@ -1513,38 +1511,38 @@ __flattenPaths :: proc(ctx: ^Context) {
 		cmd := Command(ctx.commands[i])
 		
 		switch cmd {
-			case .Move_To: {
+			case .MOVE_TO: {
 				__addPath(ctx)
 				p := ctx.commands[i + 1:]
-				__addPoint(ctx, p[0], p[1], { .Corner })
+				__addPoint(ctx, p[0], p[1], { .CORNER })
 				i += 3
 			}
 
-			case .Line_To: {
+			case .LINE_TO: {
 				p := ctx.commands[i + 1:]
-				__addPoint(ctx, p[0], p[1], { .Corner })
+				__addPoint(ctx, p[0], p[1], { .CORNER })
 				i += 3
 			}
 
-			case .Bezier_To: {
+			case .BEZIER_TO: {
 				last := __lastPoint(ctx)
 			
 				if last != nil {
 					cp1 := ctx.commands[i + 1:]
 					cp2 := ctx.commands[i + 3:]
 					p := ctx.commands[i + 5:]
-					__tesselateBezier(ctx, last.x,last.y, cp1[0],cp1[1], cp2[0],cp2[1], p[0],p[1], 0, { .Corner })
+					__tesselateBezier(ctx, last.x,last.y, cp1[0],cp1[1], cp2[0],cp2[1], p[0],p[1], 0, { .CORNER })
 				}
 
 				i += 7
 			}
 
-			case .Close: {
+			case .CLOSE: {
 				__closePath(ctx)
 				i += 1
 			}
 
-			case .Winding: {
+			case .WINDING: {
 				__pathWinding(ctx, Winding(ctx.commands[i + 1]))
 				i += 2
 			}
@@ -1578,11 +1576,11 @@ __flattenPaths :: proc(ctx: ^Context) {
 		if path.count > 2 {
 			area := __polyArea(pts[:path.count])
 			
-			if path.winding == .Counter_Clockwise && area < 0 {
+			if path.winding == .CCW && area < 0 {
 				__polyReverse(pts[:path.count])
 			}
 			
-			if path.winding == .Clockwise && area > 0 {
+			if path.winding == .CW && area > 0 {
 				__polyReverse(pts[:path.count])
 			}
 		}
@@ -1656,9 +1654,9 @@ __roundJoin :: proc(
 	dlx1 := p1.dy
 	dly1 := -p1.dx
 
-	if .Left in p1.flags {
+	if .LEFT in p1.flags {
 		lx0,ly0,lx1,ly1: f32
-		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
+		__chooseBevel(.INNER_BEVEL in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
 		a0 := math.atan2(-dly0, -dlx0)
 		a1 := math.atan2(-dly1, -dlx1)
 		
@@ -1685,7 +1683,7 @@ __roundJoin :: proc(
 		__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 	} else {
 		rx0,ry0,rx1,ry1: f32
-		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0, &ry0, &rx1, &ry1)
+		__chooseBevel(.INNER_BEVEL in p1.flags, p0, p1, -rw, &rx0, &ry0, &rx1, &ry1)
 		a0 := math.atan2(dly0, dlx0)
 		a1 := math.atan2(dly1, dlx1)
 		if a1 < a0 {
@@ -1729,13 +1727,13 @@ __bevelJoin :: proc(
 	rx0, ry0, rx1, ry1: f32
 	lx0, ly0, lx1, ly1: f32
 
-	if .Left in p1.flags {
-		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
+	if .LEFT in p1.flags {
+		__chooseBevel(.INNER_BEVEL in p1.flags, p0, p1, lw, &lx0,&ly0, &lx1,&ly1)
 
 		__vset(dst, lx0, ly0, lu,1)
 		__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
 
-		if .Bevel in p1.flags {
+		if .BEVEL in p1.flags {
 			__vset(dst, lx0, ly0, lu,1)
 			__vset(dst, p1.x - dlx0*rw, p1.y - dly0*rw, ru,1)
 
@@ -1758,12 +1756,12 @@ __bevelJoin :: proc(
 		__vset(dst, lx1, ly1, lu,1)
 		__vset(dst, p1.x - dlx1*rw, p1.y - dly1*rw, ru,1)
 	} else {
-		__chooseBevel(.Inner_Bevel in p1.flags, p0, p1, -rw, &rx0,&ry0, &rx1,&ry1)
+		__chooseBevel(.INNER_BEVEL in p1.flags, p0, p1, -rw, &rx0,&ry0, &rx1,&ry1)
 
 		__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
 		__vset(dst, rx0, ry0, ru,1)
 
-		if .Bevel in p1.flags {
+		if .BEVEL in p1.flags {
 			__vset(dst, p1.x + dlx0*lw, p1.y + dly0*lw, lu,1)
 			__vset(dst, rx0, ry0, ru,1)
 
@@ -1882,7 +1880,7 @@ __roundCapEnd :: proc(
 __calculateJoins :: proc(
 	ctx: ^Context,
 	w: f32,
-	line_join: Line_Cap,
+	line_join: LineCapType,
 	miter_limit: f32,
 ) {
 	cache := &ctx.cache
@@ -1920,29 +1918,29 @@ __calculateJoins :: proc(
 			}
 
 			// Clear flags, but keep the corner.
-			p1.flags = (.Corner in p1.flags) ? { .Corner } : {}
+			p1.flags = (.CORNER in p1.flags) ? { .CORNER } : {}
 
 			// Keep track of left turns.
 			__cross = p1.dx * p0.dy - p0.dx * p1.dy
 			if __cross > 0.0 {
 				nleft += 1
-				incl(&p1.flags, Point_Flag.Left)
+				incl(&p1.flags, PointFlag.LEFT)
 			}
 
 			// Calculate if we should use bevel or miter for inner join.
 			limit = max(1.01, min(p0.len, p1.len) * iw)
 			if (dmr2 * limit * limit) < 1.0 {
-				incl(&p1.flags, Point_Flag.Inner_Bevel)
+				incl(&p1.flags, PointFlag.INNER_BEVEL)
 			}
 
 			// Check to see if the corner needs to be beveled.
-			if .Corner in p1.flags {
-				if (dmr2 * miter_limit*miter_limit) < 1.0 || line_join == .Bevel || line_join == .Round {
-					incl(&p1.flags, Point_Flag.Bevel)
+			if .CORNER in p1.flags {
+				if (dmr2 * miter_limit*miter_limit) < 1.0 || line_join == .BEVEL || line_join == .ROUND {
+					incl(&p1.flags, PointFlag.BEVEL)
 				}
 			}
 
-			if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
+			if (.BEVEL in p1.flags) || (.INNER_BEVEL in p1.flags) {
 				path.nbevel += 1
 			}
 
@@ -1967,8 +1965,8 @@ __expandStroke :: proc(
 	ctx: ^Context,
 	w: f32,
 	fringe: f32,
-	line_cap: Line_Cap,
-	line_join: Line_Cap,
+	line_cap: LineCapType,
+	line_join: LineCapType,
 	miter_limit: f32,	
 ) -> bool {
 	cache := &ctx.cache
@@ -1994,7 +1992,7 @@ __expandStroke :: proc(
 		loop := path.closed
 	
 		// TODO check if f32 calculation necessary?	
-		if line_join == .Round {
+		if line_join == .ROUND {
 			cverts += (path.count + path.nbevel * int(ncap + 2) + 1) * 2 // plus one for loop
 		} else {
 			cverts += (path.count + path.nbevel*5 + 1) * 2 // plus one for loop
@@ -2002,7 +2000,7 @@ __expandStroke :: proc(
 
 		if !loop {
 			// space for caps
-			if line_cap == .Round {
+			if line_cap == .ROUND {
 				cverts += int(ncap*2 + 2)*2
 			} else {
 				cverts += (3 + 3)*2
@@ -2048,11 +2046,11 @@ __expandStroke :: proc(
 			dy = p1.y - p0.y
 			__normalize(&dx, &dy)
 
-			if line_cap == .Butt {
+			if line_cap == .BUTT {
 				__buttCapStart(&dst, p0, dx, dy, w, -aa*0.5, aa, u0, u1)
-			}	else if line_cap == .Butt || line_cap == .Square {
+			}	else if line_cap == .BUTT || line_cap == .SQUARE {
 				__buttCapStart(&dst, p0, dx, dy, w, w-aa, aa, u0, u1)
-			}	else if line_cap == .Round {
+			}	else if line_cap == .ROUND {
 				__roundCapStart(&dst, p0, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
@@ -2060,8 +2058,8 @@ __expandStroke :: proc(
 		for j in start..<end {
 			// TODO check this
 			// if ((p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0) {
-			if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
-				if line_join == .Round {
+			if (.BEVEL in p1.flags) || (.INNER_BEVEL in p1.flags) {
+				if line_join == .ROUND {
 					__roundJoin(&dst, p0, p1, w, w, u0, u1, int(ncap))
 				} else {
 					__bevelJoin(&dst, p0, p1, w, w, u0, u1)
@@ -2086,11 +2084,11 @@ __expandStroke :: proc(
 			dy = p1.y - p0.y
 			__normalize(&dx, &dy)
 
-			if line_cap == .Butt {
+			if line_cap == .BUTT {
 				__buttCapEnd(&dst, p1, dx, dy, w, -aa*0.5, aa, u0, u1)
-			}	else if line_cap == .Butt || line_cap == .Square {
+			}	else if line_cap == .BUTT || line_cap == .SQUARE {
 				__buttCapEnd(&dst, p1, dx, dy, w, w-aa, aa, u0, u1)
-			}	else if line_cap == .Round {
+			}	else if line_cap == .ROUND {
 				__roundCapEnd(&dst, p1, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
@@ -2109,7 +2107,7 @@ __expandStroke :: proc(
 __expandFill :: proc(
 	ctx: ^Context,
 	w: f32,
-	line_join: Line_Cap,
+	line_join: LineCapType,
 	miter_limit: f32,
 ) -> bool {
 	cache := &ctx.cache
@@ -2148,13 +2146,13 @@ __expandFill :: proc(
 			p1 = &pts[0]
 
 			for j in 0..<path.count {
-				if .Bevel in p1.flags {
+				if .BEVEL in p1.flags {
 					dlx0 := p0.dy
 					dly0 := -p0.dx
 					dlx1 := p1.dy
 					dly1 := -p1.dx
 					
-					if .Left in p1.flags {
+					if .LEFT in p1.flags {
 						lx := p1.x + p1.dmx * woff
 						ly := p1.y + p1.dmy * woff
 						__vset(&dst, lx, ly, 0.5,1)
@@ -2205,7 +2203,7 @@ __expandFill :: proc(
 			p1 = &pts[0]
 
 			for j in 0..<path.count {
-				if (.Bevel in p1.flags) || (.Inner_Bevel in p1.flags) {
+				if (.BEVEL in p1.flags) || (.INNER_BEVEL in p1.flags) {
 					__bevelJoin(&dst, p0, p1, lw, rw, lu, ru)
 				} else {
 					__vset(&dst, p1.x + (p1.dmx * lw), p1.y + (p1.dmy * lw), lu,1)
@@ -2279,13 +2277,13 @@ FillStrokeScoped :: proc(ctx: ^Context) {
 
 // Starts new sub-path with specified point as first point.
 MoveTo :: proc(ctx: ^Context, x, y: f32) {
-	values := [3]f32 { __cmdf(.Move_To), x, y }
+	values := [3]f32 { __cmdf(.MOVE_TO), x, y }
 	__appendCommands(ctx, values[:])
 }
 
 // Adds line segment from the last point in the path to the specified point.
 LineTo :: proc(ctx: ^Context, x, y: f32) {
-	values := [3]f32 { __cmdf(.Line_To), x, y }
+	values := [3]f32 { __cmdf(.LINE_TO), x, y }
 	__appendCommands(ctx, values[:])
 }
 
@@ -2296,7 +2294,7 @@ BezierTo :: proc(
 	c2x, c2y: f32,
 	x, y: f32,
 ) {
-	values := [?]f32 { __cmdf(.Bezier_To), c1x, c1y, c2x, c2y, x, y }
+	values := [?]f32 { __cmdf(.BEZIER_TO), c1x, c1y, c2x, c2y, x, y }
 	__appendCommands(ctx, values[:])
 }
 
@@ -2305,7 +2303,7 @@ QuadTo :: proc(ctx: ^Context, cx, cy, x, y: f32) {
 	x0 := ctx.command_x
 	y0 := ctx.command_y
 	values := [?]f32 {
-		__cmdf(.Bezier_To),
+		__cmdf(.BEZIER_TO),
 		x0 + 2 / 3 * (cx - x0), 
 		y0 + 2 / 3 * (cy - y0),
 		x + 2 / 3 * (cx - x), 
@@ -2361,13 +2359,13 @@ ArcTo :: proc(
 		cy = y1 + dy0*d + -dx0*radius
 		a0 = math.atan2(dx0, -dy0)
 		a1 = math.atan2(-dx1, dy1)
-		direction = .Clockwise
+		direction = .CW
 	} else {
 		cx = x1 + dx0*d + -dy0*radius
 		cy = y1 + dy0*d + dx0*radius
 		a0 = math.atan2(-dx0, dy0)
 		a1 = math.atan2(dx1, -dy1)
-		direction = .Counter_Clockwise
+		direction = .CCW
 	}
 
 	Arc(ctx, cx, cy, radius, a0, a1, direction)
@@ -2377,11 +2375,11 @@ ArcTo :: proc(
 // and the arc is drawn from angle a0 to a1, and swept in direction dir (NVG_CCW, or NVG_CW).
 // Angles are specified in radians.
 Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
-	move: Command = .Line_To if len(ctx.commands) > 0 else .Move_To
+	move: Command = .LINE_TO if len(ctx.commands) > 0 else .MOVE_TO
 
 	// Clamp angles
 	da := a1 - a0
-	if dir == .Clockwise {
+	if dir == .CW {
 		if abs(da) >= math.PI*2 {
 			da = math.PI*2
 		} else {
@@ -2404,7 +2402,7 @@ Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 	hda := (da / f32(ndivs)) / 2.0
 	kappa := abs(4.0 / 3.0 * (1.0 - math.cos(hda)) / math.sin(hda))
 
-	if dir == .Counter_Clockwise {
+	if dir == .CCW {
 		kappa = -kappa
 	}
 
@@ -2426,7 +2424,7 @@ Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 			values[nvals] = x; nvals += 1
 			values[nvals] = y; nvals += 1
 		} else {
-			values[nvals] = __cmdf(.Bezier_To); nvals += 1
+			values[nvals] = __cmdf(.BEZIER_TO); nvals += 1
 			values[nvals] = px + ptanx; nvals += 1
 			values[nvals] = py + ptany; nvals += 1
 			values[nvals] = x-tanx; nvals += 1
@@ -2446,30 +2444,30 @@ Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
 
 // Closes current sub-path with a line segment.
 ClosePath :: proc(ctx: ^Context) {
-	values := [1]f32 { __cmdf(.Close) }
+	values := [1]f32 { __cmdf(.CLOSE) }
 	__appendCommands(ctx, values[:])
 }
 
 // Sets the current sub-path winding, see NVGwinding and NVGsolidity.
 PathWinding :: proc(ctx: ^Context, direction: Winding) {
-	values := [2]f32 { __cmdf(.Winding), f32(direction) }
+	values := [2]f32 { __cmdf(.WINDING), f32(direction) }
 	__appendCommands(ctx, values[:])	
 }
 
 // same as path_winding but with different enum
 PathSolidity :: proc(ctx: ^Context, solidity: Solidity) {
-	values := [2]f32 { __cmdf(.Winding), f32(solidity) }
+	values := [2]f32 { __cmdf(.WINDING), f32(solidity) }
 	__appendCommands(ctx, values[:])	
 }
 
 // Creates new rectangle shaped sub-path.
 Rect :: proc(ctx: ^Context, x, y, w, h: f32) {
 	values := [?]f32 {
-		__cmdf(.Move_To), x, y,
-		__cmdf(.Line_To), x, y + h,
-		__cmdf(.Line_To), x + w, y + h,
-		__cmdf(.Line_To), x + w, y,
-		__cmdf(.Close),
+		__cmdf(.MOVE_TO), x, y,
+		__cmdf(.LINE_TO), x, y + h,
+		__cmdf(.LINE_TO), x + w, y + h,
+		__cmdf(.LINE_TO), x + w, y,
+		__cmdf(.CLOSE),
 	}
 	__appendCommands(ctx, values[:])
 }
@@ -2503,16 +2501,16 @@ RoundedRectVarying :: proc(
 		rxTL := min(radius_top_left, halfw) * math.sign(w)
 		ryTL := min(radius_top_left, halfh) * math.sign(h)
 		values := [?]f32 {
-			__cmdf(.Move_To), x, y + ryTL,
-			__cmdf(.Line_To), x, y + h - ryBL,
-			__cmdf(.Bezier_To), x, y + h - ryBL*(1 - KAPPA), x + rxBL*(1 - KAPPA), y + h, x + rxBL, y + h,
-			__cmdf(.Line_To), x + w - rxBR, y + h,
-			__cmdf(.Bezier_To), x + w - rxBR*(1 - KAPPA), y + h, x + w, y + h - ryBR*(1 - KAPPA), x + w, y + h - ryBR,
-			__cmdf(.Line_To), x + w, y + ryTR,
-			__cmdf(.Bezier_To), x + w, y + ryTR*(1 - KAPPA), x + w - rxTR*(1 - KAPPA), y, x + w - rxTR, y,
-			__cmdf(.Line_To), x + rxTL, y,
-			__cmdf(.Bezier_To), x + rxTL*(1 - KAPPA), y, x, y + ryTL*(1 - KAPPA), x, y + ryTL,
-			__cmdf(.Close),
+			__cmdf(.MOVE_TO), x, y + ryTL,
+			__cmdf(.LINE_TO), x, y + h - ryBL,
+			__cmdf(.BEZIER_TO), x, y + h - ryBL*(1 - KAPPA), x + rxBL*(1 - KAPPA), y + h, x + rxBL, y + h,
+			__cmdf(.LINE_TO), x + w - rxBR, y + h,
+			__cmdf(.BEZIER_TO), x + w - rxBR*(1 - KAPPA), y + h, x + w, y + h - ryBR*(1 - KAPPA), x + w, y + h - ryBR,
+			__cmdf(.LINE_TO), x + w, y + ryTR,
+			__cmdf(.BEZIER_TO), x + w, y + ryTR*(1 - KAPPA), x + w - rxTR*(1 - KAPPA), y, x + w - rxTR, y,
+			__cmdf(.LINE_TO), x + rxTL, y,
+			__cmdf(.BEZIER_TO), x + rxTL*(1 - KAPPA), y, x, y + ryTL*(1 - KAPPA), x, y + ryTL,
+			__cmdf(.CLOSE),
 		}
 		__appendCommands(ctx, values[:])
 	}
@@ -2521,12 +2519,12 @@ RoundedRectVarying :: proc(
 // Creates new ellipse shaped sub-path.
 Ellipse :: proc(ctx: ^Context, cx, cy, rx, ry: f32) {
 	values := [?]f32 {
-		__cmdf(.Move_To), cx-rx, cy,
-		__cmdf(.Bezier_To), cx-rx, cy+ry*KAPPA, cx-rx*KAPPA, cy+ry, cx, cy+ry,
-		__cmdf(.Bezier_To), cx+rx*KAPPA, cy+ry, cx+rx, cy+ry*KAPPA, cx+rx, cy,
-		__cmdf(.Bezier_To), cx+rx, cy-ry*KAPPA, cx+rx*KAPPA, cy-ry, cx, cy-ry,
-		__cmdf(.Bezier_To), cx-rx*KAPPA, cy-ry, cx-rx, cy-ry*KAPPA, cx-rx, cy,
-		__cmdf(.Close)		
+		__cmdf(.MOVE_TO), cx-rx, cy,
+		__cmdf(.BEZIER_TO), cx-rx, cy+ry*KAPPA, cx-rx*KAPPA, cy+ry, cx, cy+ry,
+		__cmdf(.BEZIER_TO), cx+rx*KAPPA, cy+ry, cx+rx, cy+ry*KAPPA, cx+rx, cy,
+		__cmdf(.BEZIER_TO), cx+rx, cy-ry*KAPPA, cx+rx*KAPPA, cy-ry, cx, cy-ry,
+		__cmdf(.BEZIER_TO), cx-rx*KAPPA, cy-ry, cx-rx, cy-ry*KAPPA, cx-rx, cy,
+		__cmdf(.CLOSE)		
 	}
 	__appendCommands(ctx, values[:])
 }
@@ -2544,9 +2542,9 @@ Fill :: proc(ctx: ^Context) {
 	__flattenPaths(ctx)
 
 	if ctx.params.edge_anti_alias && state.shape_anti_alias {
-		__expandFill(ctx, ctx.fringe_width, .Miter, 2.4)
+		__expandFill(ctx, ctx.fringe_width, .MITER, 2.4)
 	} else {
-		__expandFill(ctx, 0, .Miter, 2.4)
+		__expandFill(ctx, 0, .MITER, 2.4)
 	}
 
 	// apply global alpha
@@ -2746,19 +2744,19 @@ TextLineHeight :: proc(ctx: ^Context, line_height: f32) {
 }
 
 // Sets the horizontal text align of current text style
-TextAlignHorizontal :: proc(ctx: ^Context, align: Align_Horizontal) {
+TextAlignHorizontal :: proc(ctx: ^Context, align: AlignHorizontal) {
 	state := __getState(ctx)
 	state.align_horizontal = align
 }
 
 // Sets the vertical text align of current text style
-TextAlignVertical :: proc(ctx: ^Context, align: Align_Vertical) {
+TextAlignVertical :: proc(ctx: ^Context, align: AlignVertical) {
 	state := __getState(ctx)
 	state.align_vertical = align
 }
 
 // Sets the text align of current text style, see NVGalign for options.
-TextAlign :: proc(ctx: ^Context, ah: Align_Horizontal, av: Align_Vertical) {
+TextAlign :: proc(ctx: ^Context, ah: AlignHorizontal, av: AlignVertical) {
 	state := __getState(ctx)
 	state.align_horizontal = ah
 	state.align_vertical = av
@@ -2896,12 +2894,12 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 	x := x * scale
 	y := y * scale
 	switch fstate.ah {
-		case .Left: {}
-		case .Middle: {
+		case .LEFT: {}
+		case .CENTER: {
 			width := fontstash.CodepointWidth(font, codepoint, fscale)
 			x = math.round(x - width * 0.5)
 		}
-		case .Right: {
+		case .RIGHT: {
 			width := fontstash.CodepointWidth(font, codepoint, fscale)
 			x -= width
 		}
@@ -3128,7 +3126,7 @@ TextBox :: proc(
 	_, _, line_height := TextMetrics(ctx)
 	old_align := state.align_horizontal
 	defer state.align_horizontal = old_align
-	state.align_horizontal = .Left
+	state.align_horizontal = .LEFT
 	rows_mod := rows[:]
 
 	y := y
@@ -3404,7 +3402,7 @@ TextBoxBounds :: proc(
 	valign := state.align_vertical
 	old_align := state.align_horizontal
 	defer state.align_horizontal = old_align
-	state.align_horizontal = .Left
+	state.align_horizontal = .LEFT
 
 	_, _, lineh := TextMetrics(ctx)
 	minx, maxx := x, x
@@ -3432,9 +3430,9 @@ TextBoxBounds :: proc(
 			
 			// Horizontal bounds
 			switch halign {
-				case .Left: dx = 0
-				case .Middle: dx = breakRowWidth*0.5 - row.width*0.5
-				case .Right: dx = breakRowWidth - row.width
+				case .LEFT: dx = 0
+				case .CENTER: dx = breakRowWidth*0.5 - row.width*0.5
+				case .RIGHT: dx = breakRowWidth - row.width
 			}
 
 			rminx = x + row.minx + dx

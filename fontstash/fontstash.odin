@@ -30,19 +30,19 @@ HASH_LUT_SIZE :: 256
 INIT_GLYPHS :: 256
 INIT_ATLAS_NODES :: 256
 MAX_FALLBACKS :: 20
-Glyph_Index :: i32
+Glyph_Index :: i32 // in case you want to change the handle for glyph indices
 
-Align_Horizontal :: enum {
-	Left,
-	Middle,
-	Right,
+AlignHorizontal :: enum {
+	LEFT,
+	CENTER,
+	RIGHT,
 }
 
-Align_Vertical :: enum {
-	Top,
-	Middle,
-	Bottom,
-	Baseline,
+AlignVertical :: enum {
+	TOP,
+	MIDDLE,
+	BOTTOM,
+	BASELINE,
 }
 
 Font :: struct {
@@ -73,7 +73,7 @@ Glyph :: struct {
 	xadvance: i16,
 }
 
-Atlas_Node :: struct {
+AtlasNode :: struct {
 	x, y, width: i16,
 }
 
@@ -83,16 +83,16 @@ Vertex :: struct #packed {
 	color: [4]u8,
 }
 
-Quad_Location :: enum {
-	Top_Left,
-	Bottom_Left,
+QuadLocation :: enum {
+	TOPLEFT,
+	BOTTOMLEFT,
 }
 
-Font_Context :: struct {
+FontContext :: struct {
 	fonts: [dynamic]Font, // allocated using context.allocator
 
 	// always assuming user wants to resize
-	nodes: [dynamic]Atlas_Node,
+	nodes: [dynamic]AtlasNode,
 
 	// actual pixels
 	texture_data: []byte, // allocated using context.allocator
@@ -104,7 +104,7 @@ Font_Context :: struct {
 	states: []State,
 	state_count: int, // used states
 
-	location: Quad_Location,
+	location: QuadLocation,
 
 	// dirty rectangle of the texture region that was updated
 	dirty_rect: [4]f32,
@@ -118,7 +118,7 @@ Font_Context :: struct {
 	callback_update: proc(data: rawptr, dirty_rect: [4]f32, texture_data: rawptr), 
 }
 
-Init :: proc(using ctx: ^Font_Context, w, h: int, loc: Quad_Location) {
+Init :: proc(using ctx: ^FontContext, w, h: int, loc: QuadLocation) {
 	user_data = ctx
 	location = loc
 	fonts = make([dynamic]Font, 0, 8)
@@ -129,13 +129,13 @@ Init :: proc(using ctx: ^Font_Context, w, h: int, loc: Quad_Location) {
 	
 	width = w
 	height = h
-	nodes = make([dynamic]Atlas_Node, 0, INIT_ATLAS_NODES)
+	nodes = make([dynamic]AtlasNode, 0, INIT_ATLAS_NODES)
 	__dirtyRectReset(ctx)
 
 	states = make([]State, MAX_STATES)
 
 	// NOTE NECESSARY
-	append(&nodes, Atlas_Node {
+	append(&nodes, AtlasNode {
 		width = i16(w),
 	})
 
@@ -145,7 +145,7 @@ Init :: proc(using ctx: ^Font_Context, w, h: int, loc: Quad_Location) {
 	ClearState(ctx)
 }
 
-Destroy :: proc(using ctx: ^Font_Context) {
+Destroy :: proc(using ctx: ^FontContext) {
 	for font in &fonts {
 		delete(font.loaded_data)
 		delete(font.glyphs)
@@ -157,7 +157,7 @@ Destroy :: proc(using ctx: ^Font_Context) {
 	delete(nodes)
 }
 
-Reset :: proc(using ctx: ^Font_Context) {
+Reset :: proc(using ctx: ^FontContext) {
 	__atlasReset(ctx, width, height)
 	__dirtyRectReset(ctx)
 	mem.zero_slice(texture_data)
@@ -171,7 +171,7 @@ Reset :: proc(using ctx: ^Font_Context) {
 	ClearState(ctx)
 }
 
-__atlasInsertNode :: proc(using ctx: ^Font_Context, idx, x, y, w: int) {
+__atlasInsertNode :: proc(using ctx: ^FontContext, idx, x, y, w: int) {
 	// resize is alright here
 	resize(&nodes, len(nodes) + 1)
 
@@ -186,7 +186,7 @@ __atlasInsertNode :: proc(using ctx: ^Font_Context, idx, x, y, w: int) {
 	nodes[idx].width = i16(w)
 }
 
-__atlasRemoveNode :: proc(using ctx: ^Font_Context, idx: int) {
+__atlasRemoveNode :: proc(using ctx: ^FontContext, idx: int) {
 	if len(nodes) == 0 {
 		return
 	}
@@ -201,7 +201,7 @@ __atlasRemoveNode :: proc(using ctx: ^Font_Context, idx: int) {
 	raw.len -= 1
 }
 
-__atlasExpand :: proc(using ctx: ^Font_Context, w, h: int) {
+__atlasExpand :: proc(using ctx: ^FontContext, w, h: int) {
 	if w > width {
 		__atlasInsertNode(ctx, len(nodes), width, 0, w - width)
 	}
@@ -210,18 +210,18 @@ __atlasExpand :: proc(using ctx: ^Font_Context, w, h: int) {
 	height = h
 }
 
-__atlasReset :: proc(using ctx: ^Font_Context, w, h: int) {
+__atlasReset :: proc(using ctx: ^FontContext, w, h: int) {
 	width = w
 	height = h
 	clear(&nodes)
 
 	// init root node
-	append(&nodes, Atlas_Node {
+	append(&nodes, AtlasNode {
 		width = i16(w),
 	})
 }
 
-__AtlasAddSkylineLevel :: proc(using ctx: ^Font_Context, idx, x, y, w, h: int) {
+__AtlasAddSkylineLevel :: proc(using ctx: ^FontContext, idx, x, y, w, h: int) {
 	// insert new node
 	__atlasInsertNode(ctx, idx, x, y + h, w)
 
@@ -253,7 +253,7 @@ __AtlasAddSkylineLevel :: proc(using ctx: ^Font_Context, idx, x, y, w, h: int) {
 	}
 }
 
-__AtlasRectFits :: proc(using ctx: ^Font_Context, i, w, h: int) -> int {
+__AtlasRectFits :: proc(using ctx: ^FontContext, i, w, h: int) -> int {
 	// Checks if there is enough space at the location of skyline span 'i',
 	// and return the max height of all skyline spans under that at that location,
 	// (think tetris block being dropped at that position). Or -1 if no space found.
@@ -283,7 +283,7 @@ __AtlasRectFits :: proc(using ctx: ^Font_Context, i, w, h: int) -> int {
 	return y
 }
 
-__AtlasAddRect :: proc(using ctx: ^Font_Context, rw, rh: int) -> (rx, ry: int, ok: bool) {
+__AtlasAddRect :: proc(using ctx: ^FontContext, rw, rh: int) -> (rx, ry: int, ok: bool) {
 	besth := height
 	bestw := width
 	besti, bestx, besty := -1, -1, -1
@@ -315,7 +315,7 @@ __AtlasAddRect :: proc(using ctx: ^Font_Context, rw, rh: int) -> (rx, ry: int, o
 	return
 }
 
-__AtlasAddWhiteRect :: proc(ctx: ^Font_Context, w, h: int) {
+__AtlasAddWhiteRect :: proc(ctx: ^FontContext, w, h: int) {
 	gx, gy, ok := __AtlasAddRect(ctx, w, h)
 
 	if !ok {
@@ -339,7 +339,7 @@ __AtlasAddWhiteRect :: proc(ctx: ^Font_Context, w, h: int) {
 }
 
 AddFontPath :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	name: string,
 	path: string,
 ) -> int {
@@ -355,7 +355,7 @@ AddFontPath :: proc(
 // push a font to the font stack
 // optionally init with ascii characters at a wanted size
 AddFontMem :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	name: string,
 	data: []u8, 
 ) -> int {
@@ -379,7 +379,7 @@ AddFontMem :: proc(
 
 AddFont :: proc { AddFontPath, AddFontMem }
 
-AddFallbackFont :: proc(ctx: ^Font_Context, base, fallback: int) -> bool {
+AddFallbackFont :: proc(ctx: ^FontContext, base, fallback: int) -> bool {
 	base_font := __getFont(ctx, base)
 	
 	if base_font.nfallbacks < MAX_FALLBACKS {
@@ -391,7 +391,7 @@ AddFallbackFont :: proc(ctx: ^Font_Context, base, fallback: int) -> bool {
 	return false
 }
 
-ResetFallbackFont :: proc(ctx: ^Font_Context, base: int) {
+ResetFallbackFont :: proc(ctx: ^FontContext, base: int) {
 	base_font := __getFont(ctx, base)
 	base_font.nfallbacks = 0
 	clear(&base_font.glyphs)
@@ -399,7 +399,7 @@ ResetFallbackFont :: proc(ctx: ^Font_Context, base: int) {
 }
 
 // find font by name
-GetFontByName :: proc(ctx: ^Font_Context, name: string) -> int {
+GetFontByName :: proc(ctx: ^FontContext, name: string) -> int {
 	for font, i in ctx.fonts {
 		if font.name == name {
 			return i
@@ -453,7 +453,7 @@ __buildGlyphBitmap :: proc(
 
 // get glyph and push to atlas if not exists
 __getGlyph :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	font: ^Font,
 	codepoint: rune,
 	isize: i16,
@@ -649,7 +649,7 @@ __blur :: proc(dst: []u8, w, h, dst_stride: int, blur_size: i16) {
 // Texture expansion
 /////////////////////////////////
 
-ExpandAtlas :: proc(ctx: ^Font_Context, width, height: int, allocator := context.allocator) -> bool {
+ExpandAtlas :: proc(ctx: ^FontContext, width, height: int, allocator := context.allocator) -> bool {
 	width := max(ctx.width, width)
 	height := max(ctx.height, height)
 
@@ -701,7 +701,7 @@ ExpandAtlas :: proc(ctx: ^Font_Context, width, height: int, allocator := context
 	return true
 }
 
-ResetAtlas :: proc(ctx: ^Font_Context, width, height: int, allocator := context.allocator) -> bool {
+ResetAtlas :: proc(ctx: ^FontContext, width, height: int, allocator := context.allocator) -> bool {
 	if width == ctx.width && height == ctx.height {
 		// just clear
 		mem.zero_slice(ctx.texture_data)
@@ -743,7 +743,7 @@ __getGlyphKernAdvance :: proc(font: ^Font, glyph1, glyph2: Glyph_Index) -> i32 {
 }
 
 // get a font with bounds checking
-__getFont :: proc(ctx: ^Font_Context, index: int, loc := #caller_location) -> ^Font #no_bounds_check {
+__getFont :: proc(ctx: ^FontContext, index: int, loc := #caller_location) -> ^Font #no_bounds_check {
 	runtime.bounds_check_error_loc(loc, index, len(ctx.fonts))
 	return &ctx.fonts[index]
 }
@@ -761,17 +761,17 @@ CodepointWidth :: proc(
 }
 
 // get top and bottom line boundary
-LineBounds :: proc(ctx: ^Font_Context, y: f32) -> (miny, maxy: f32) {
+LineBounds :: proc(ctx: ^FontContext, y: f32) -> (miny, maxy: f32) {
 	state := __getState(ctx)
 	font := __getFont(ctx, state.font)
 	isize := i16(state.size * 10.0)
 	y := y
 	y += __getVerticalAlign(ctx, font, state.av, isize)
 
-	if ctx.location == .Top_Left {
+	if ctx.location == .TOPLEFT {
 		miny = y - font.ascender * f32(isize) / 10
 		maxy = miny + font.line_height * f32(isize / 10)
-	} else if ctx.location == .Bottom_Left {
+	} else if ctx.location == .BOTTOMLEFT {
 		miny = y + font.ascender * f32(isize) / 10
 		maxy = miny - font.line_height * f32(isize / 10)
 	}
@@ -780,7 +780,7 @@ LineBounds :: proc(ctx: ^Font_Context, y: f32) -> (miny, maxy: f32) {
 }
 
 // reset dirty rect
-__dirtyRectReset :: proc(using ctx: ^Font_Context) {
+__dirtyRectReset :: proc(using ctx: ^FontContext) {
 	dirty_rect[0] = f32(width)
 	dirty_rect[1] = f32(height)
 	dirty_rect[2] = 0
@@ -788,7 +788,7 @@ __dirtyRectReset :: proc(using ctx: ^Font_Context) {
 }
 
 // true when the dirty rectangle is valid and needs a texture update on the gpu
-ValidateTexture :: proc(using ctx: ^Font_Context, dirty: ^[4]f32) -> bool {
+ValidateTexture :: proc(using ctx: ^FontContext, dirty: ^[4]f32) -> bool {
 	if dirty_rect[0] < dirty_rect[2] && dirty_rect[1] < dirty_rect[3] {
 		dirty[0] = dirty_rect[0]
 		dirty[1] = dirty_rect[1]
@@ -803,27 +803,27 @@ ValidateTexture :: proc(using ctx: ^Font_Context, dirty: ^[4]f32) -> bool {
 
 // get alignment based on font
 __getVerticalAlign :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	font: ^Font,
-	av: Align_Vertical,
+	av: AlignVertical,
 	pixel_size: i16,
 ) -> (res: f32) {
 	switch ctx.location {
-		case .Top_Left: {
+		case .TOPLEFT: {
 			switch av {
-				case .Top: res = font.ascender * f32(pixel_size) / 10
-				case .Middle: res = (font.ascender + font.descender) / 2 * f32(pixel_size) / 10
-				case .Baseline: res = 0
-				case .Bottom: res = font.descender * f32(pixel_size) / 10
+				case .TOP: res = font.ascender * f32(pixel_size) / 10
+				case .MIDDLE: res = (font.ascender + font.descender) / 2 * f32(pixel_size) / 10
+				case .BASELINE: res = 0
+				case .BOTTOM: res = font.descender * f32(pixel_size) / 10
 			}
 		}
 
-		case .Bottom_Left: {
+		case .BOTTOMLEFT: {
 			switch av {
-				case .Top: res = -font.ascender * f32(pixel_size) / 10
-				case .Middle: res = -(font.ascender + font.descender) / 2 * f32(pixel_size) / 10
-				case .Baseline: res = 0
-				case .Bottom: res = -font.descender * f32(pixel_size) / 10
+				case .TOP: res = -font.ascender * f32(pixel_size) / 10
+				case .MIDDLE: res = -(font.ascender + font.descender) / 2 * f32(pixel_size) / 10
+				case .BASELINE: res = 0
+				case .BOTTOM: res = -font.descender * f32(pixel_size) / 10
 			}
 		}
 	}
@@ -873,8 +873,8 @@ State :: struct {
 	spacing: f32,
 	blur: f32,
 
-	ah: Align_Horizontal,
-	av: Align_Vertical,
+	ah: AlignHorizontal,
+	av: AlignVertical,
 }
 
 // quad that should be used to draw from the texture atlas
@@ -904,7 +904,7 @@ Text_Iter :: struct {
 }
 
 // push a state, copies the current one over to the next one
-PushState :: proc(using ctx: ^Font_Context, loc := #caller_location) #no_bounds_check {
+PushState :: proc(using ctx: ^FontContext, loc := #caller_location) #no_bounds_check {
 	runtime.bounds_check_error_loc(loc, state_count, MAX_STATES)
 
 	if state_count > 0 {
@@ -915,7 +915,7 @@ PushState :: proc(using ctx: ^Font_Context, loc := #caller_location) #no_bounds_
 }
 
 // pop a state 
-PopState :: proc(using ctx: ^Font_Context) {
+PopState :: proc(using ctx: ^FontContext) {
 	if state_count <= 1 {
 		log.error("FONTSTASH: state underflow! to many pops were called")
 	} else {
@@ -924,54 +924,54 @@ PopState :: proc(using ctx: ^Font_Context) {
 }
 
 // clear current state
-ClearState :: proc(ctx: ^Font_Context) {
+ClearState :: proc(ctx: ^FontContext) {
 	state := __getState(ctx)
 	state.size = 12
 	state.color = 255
 	state.blur = 0
 	state.spacing = 0
 	state.font = 0
-	state.ah = .Left
-	state.av = .Baseline
+	state.ah = .LEFT
+	state.av = .BASELINE
 }
 
-__getState :: #force_inline proc(ctx: ^Font_Context) -> ^State #no_bounds_check {
+__getState :: #force_inline proc(ctx: ^FontContext) -> ^State #no_bounds_check {
 	return &ctx.states[ctx.state_count - 1]
 }
 
-SetSize :: proc(ctx: ^Font_Context, size: f32) {
+SetSize :: proc(ctx: ^FontContext, size: f32) {
 	__getState(ctx).size = size
 }
 
-SetColor :: proc(ctx: ^Font_Context, color: [4]u8) {
+SetColor :: proc(ctx: ^FontContext, color: [4]u8) {
 	__getState(ctx).color = color
 }
 
-SetSpacing :: proc(ctx: ^Font_Context, spacing: f32) {
+SetSpacing :: proc(ctx: ^FontContext, spacing: f32) {
 	__getState(ctx).spacing = spacing
 }
 
-SetBlur :: proc(ctx: ^Font_Context, blur: f32) {
+SetBlur :: proc(ctx: ^FontContext, blur: f32) {
 	__getState(ctx).blur = blur
 }
 
-SetFont :: proc(ctx: ^Font_Context, font: int) {
+SetFont :: proc(ctx: ^FontContext, font: int) {
 	__getState(ctx).font = font
 }
 
 SetAh :: SetAlignHorizontal
 SetAV :: SetAlignVertical
 
-SetAlignHorizontal :: proc(ctx: ^Font_Context, ah: Align_Horizontal) {
+SetAlignHorizontal :: proc(ctx: ^FontContext, ah: AlignHorizontal) {
 	__getState(ctx).ah = ah
 }
 
-SetAlignVertical :: proc(ctx: ^Font_Context, av: Align_Vertical) {
+SetAlignVertical :: proc(ctx: ^FontContext, av: AlignVertical) {
 	__getState(ctx).av = av
 }
 
 __getQuad :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	font: ^Font,
 	
 	previous_glyph_index: i32,
@@ -998,7 +998,7 @@ __getQuad :: proc(
 	y1 = f32(glyph.y1 - 1)
 
 	switch ctx.location {
-		case .Top_Left: {
+		case .TOPLEFT: {
 			rx = math.floor(x^ + xoff)
 			ry = math.floor(y^ + yoff)
 			
@@ -1013,7 +1013,7 @@ __getQuad :: proc(
 			quad.t1 = y1 * ctx.ith
 		}
 
-		case .Bottom_Left: {
+		case .BOTTOMLEFT: {
 			rx = math.floor(x^ + xoff)
 			ry = math.floor(y^ - yoff)
 
@@ -1034,7 +1034,7 @@ __getQuad :: proc(
 
 // init text iter struct with settings
 TextIterInit :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	x: f32,
 	y: f32,
 	text: string,
@@ -1049,12 +1049,12 @@ TextIterInit :: proc(
 	x := x
 	y := y
 	switch state.ah {
-		case .Left: {}
-		case .Middle: {
+		case .LEFT: {}
+		case .CENTER: {
 			width := TextBounds(ctx, text, x, y, nil)
 			x = math.round(x - width * 0.5)
 		}
-		case .Right: {
+		case .RIGHT: {
 			width := TextBounds(ctx, text, x, y, nil)
 			x -= width
 		}
@@ -1081,7 +1081,7 @@ TextIterInit :: proc(
 
 // step through each codepoint
 TextIterNext :: proc(
-	ctx: ^Font_Context, 
+	ctx: ^FontContext, 
 	iter: ^Text_Iter, 
 	quad: ^Quad,
 ) -> (ok: bool) {
@@ -1113,7 +1113,7 @@ TextIterNext :: proc(
 
 // width of a text line, optionally the full rect
 TextBounds :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 	text: string,
 	x: f32 = 0,
 	y: f32 = 0,
@@ -1153,14 +1153,14 @@ TextBounds :: proc(
 					maxx = quad.x1
 				}
 
-				if ctx.location == .Top_Left {
+				if ctx.location == .TOPLEFT {
 					if quad.y0 < miny {
 						miny = quad.y0
 					}
 					if quad.y1 > maxy {
 						maxy = quad.y1
 					}
-				} else if ctx.location == .Bottom_Left {
+				} else if ctx.location == .BOTTOMLEFT {
 					if quad.y1 < miny {
 						miny = quad.y1
 					}
@@ -1177,12 +1177,12 @@ TextBounds :: proc(
 	// horizontal alignment
 	advance := x - start_x
 	switch state.ah {
-		case .Left: {}
-		case .Middle: {
+		case .LEFT: {}
+		case .CENTER: {
 			minx -= advance * 0.5
 			maxx -= advance * 0.5
 		}
-		case .Right: {
+		case .RIGHT: {
 			minx -= advance
 			maxx -= advance
 		}
@@ -1196,7 +1196,7 @@ TextBounds :: proc(
 }
 
 VerticalMetrics :: proc(
-	ctx: ^Font_Context,
+	ctx: ^FontContext,
 ) -> (ascender, descender, line_height: f32) {
 	state := __getState(ctx)
 	isize := i16(state.size * 10.0)
@@ -1208,14 +1208,14 @@ VerticalMetrics :: proc(
 }
 
 // reset to single state
-BeginState :: proc(using ctx: ^Font_Context) {
+BeginState :: proc(using ctx: ^FontContext) {
 	state_count = 0
 	PushState(ctx)
 	ClearState(ctx)
 }
 
 // checks for texture updates after potential __getGlyph calls
-EndState :: proc(using ctx: ^Font_Context) {
+EndState :: proc(using ctx: ^FontContext) {
 	// check for texture update
 	if dirty_rect[0] < dirty_rect[2] && dirty_rect[1] < dirty_rect[3] {
 		if callback_update != nil {
