@@ -6,7 +6,7 @@ import "core:mem"
 import "core:math"
 import "core:fmt"
 import gl "vendor:OpenGL"
-import nvg "../nanovg"
+import nvg "../../nanovg"
 
 Color :: nvg.Color
 Vertex :: nvg.Vertex

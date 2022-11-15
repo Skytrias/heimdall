@@ -811,19 +811,19 @@ __getVerticalAlign :: proc(
 	switch ctx.location {
 		case .TOPLEFT: {
 			switch av {
-				case .TOP: res = font.ascender * f32(PixelSize) / 10
-				case .MIDDLE: res = (font.ascender + font.descender) / 2 * f32(PixelSize) / 10
+				case .TOP: res = font.ascender * f32(pixelSize) / 10
+				case .MIDDLE: res = (font.ascender + font.descender) / 2 * f32(pixelSize) / 10
 				case .BASELINE: res = 0
-				case .BOTTOM: res = font.descender * f32(PixelSize) / 10
+				case .BOTTOM: res = font.descender * f32(pixelSize) / 10
 			}
 		}
 
 		case .BOTTOMLEFT: {
 			switch av {
-				case .TOP: res = -font.ascender * f32(PixelSize) / 10
-				case .MIDDLE: res = -(font.ascender + font.descender) / 2 * f32(PixelSize) / 10
+				case .TOP: res = -font.ascender * f32(pixelSize) / 10
+				case .MIDDLE: res = -(font.ascender + font.descender) / 2 * f32(pixelSize) / 10
 				case .BASELINE: res = 0
-				case .BOTTOM: res = -font.descender * f32(PixelSize) / 10
+				case .BOTTOM: res = -font.descender * f32(pixelSize) / 10
 			}
 		}
 	}
