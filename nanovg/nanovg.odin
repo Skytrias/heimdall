@@ -44,8 +44,8 @@ Paint :: struct {
 	extent: [2]f32,
 	radius: f32,
 	feather: f32,
-	inner_color: Color,
-	outer_color: Color,
+	innerColor: Color,
+	outerColor: Color,
 	image: int,
 }
 
@@ -96,10 +96,10 @@ CompositeOperation :: enum {
 }
 
 CompositeOperationState :: struct {
-	src_RGB: BlendFactor,
-	dst_RGB: BlendFactor,
-	src_alpha: BlendFactor,
-	dst_alpha: BlendFactor,
+	srcRGB: BlendFactor,
+	dstRGB: BlendFactor,
+	srcAlpha: BlendFactor,
+	dstAlpha: BlendFactor,
 }
 
 // render data structures
@@ -114,7 +114,7 @@ ScissorT :: struct {
 	extent: [2]f32,
 }
 
-Command :: enum {
+Commands :: enum {
 	MOVE_TO,
 	LINE_TO,
 	BEZIER_TO,
@@ -157,107 +157,107 @@ Path :: struct {
 }
 
 State :: struct {
-	composite_operation: CompositeOperationState,
-	shape_anti_alias: bool,
+	compositeOperation: CompositeOperationState,
+	shapeAntiAlias: bool,
 	fill: Paint,
 	stroke: Paint,
-	stroke_width: f32,
-	miter_limit: f32,
-	line_join: LineCapType,
-	line_cap: LineCapType,
+	strokeWidth: f32,
+	miterLimit: f32,
+	lineJoin: LineCapType,
+	lineCap: LineCapType,
 	alpha: f32,
 	xform: Matrix,
 	scissor: ScissorT,
 
 	// font state
-	font_size: f32,
-	letter_spacing: f32,
-	line_height: f32,
-	font_blur: f32,
-	align_horizontal: AlignHorizontal,
-	align_vertical: AlignVertical,
-	font_id: int,
+	fontSize: f32,
+	letterSpacing: f32,
+	lineHeight: f32,
+	fontBlur: f32,
+	alignHorizontal: AlignHorizontal,
+	alignVertical: AlignVertical,
+	fontId: int,
 }
 
 Context :: struct {
 	params: Params,
 	commands: [dynamic]f32,
-	command_x, command_y: f32,
+	commandx, commandy: f32,
 	states: [MAX_STATES]State,
-	state_count: int,
+	nstates: int,
 	cache: PathCache,
-	tess_tol: f32,
-	dist_tol: f32,
-	fringe_width: f32,
-	device_px_ratio: f32,
+	tessTol: f32,
+	distTol: f32,
+	fringeWidth: f32,
+	devicePxRatio: f32,
 
 	// font
 	fs: fontstash.FontContext,
-	font_images: [MAX_FONTIMAGES]int,
-	font_image_idx: int,
+	fontImages: [MAX_FONTIMAGES]int,
+	fontImageIdx: int,
 
 	// stats
-	draw_call_count: int,
-	fill_tri_count: int,
-	stroke_tri_count: int,
-	text_tri_count: int,
+	drawCallCount: int,
+	fillTriCount: int,
+	strokeTriCount: int,
+	textTriCount: int,
 
 	// flush texture
-	texture_dirty: bool,
+	textureDirty: bool,
 }
 
 Params :: struct {
-	user_ptr: rawptr,
-	edge_anti_alias: bool,
+	userPtr: rawptr,
+	edgeAntiAlias: bool,
 	
 	// callbacks to fill out
-	render_create: proc(uptr: rawptr) -> bool,
-	render_delete: proc(uptr: rawptr),
+	renderCreate: proc(uptr: rawptr) -> bool,
+	renderDelete: proc(uptr: rawptr),
 
 	// textures calls
-	render_create_texture: proc(
+	renderCreateTexture: proc(
 		uptr: rawptr, 
 		type: Texture,
 		w, h: int, 
-		image_flags: ImageFlags, 
+		imageFlags: ImageFlags, 
 		data: []byte,
 	) -> int,
-	render_delete_texture: proc(uptr: rawptr, image: int) -> bool,
-	render_update_texture: proc(
+	renderDeleteTexture: proc(uptr: rawptr, image: int) -> bool,
+	renderUpdateTexture: proc(
 		uptr: rawptr, 
 		image: int,
 		x, y: int,
 		w, h: int,
 		data: []byte,
 	) -> bool,
-	render_get_texture_size: proc(uptr: rawptr, image: int, w, h: ^int) -> bool,
+	renderGetTextureSize: proc(uptr: rawptr, image: int, w, h: ^int) -> bool,
 
 	// rendering calls
-	render_viewport: proc(uptr: rawptr, width, height, device_pixel_ratio: f32),
-	render_cancel: proc(uptr: rawptr),
-	render_flush: proc(uptr: rawptr),
-	render_fill: proc(
+	renderViewport: proc(uptr: rawptr, width, height, devicePixelRatio: f32),
+	renderCancel: proc(uptr: rawptr),
+	renderFlush: proc(uptr: rawptr),
+	renderFill: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: CompositeOperationState, 
+		compositeOperation: CompositeOperationState, 
 		scissor: ^ScissorT,
 		fringe: f32,
 		bounds: [4]f32,
 		paths: []Path,
 	),
-	render_stroke: proc(
+	renderStroke: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: CompositeOperationState, 
+		compositeOperation: CompositeOperationState, 
 		scissor: ^ScissorT,
 		fringe: f32,
-		stroke_width: f32,
+		strokeWidth: f32,
 		paths: []Path,
 	),	
-	render_triangles: proc(
+	renderTriangles: proc(
 		uptr: rawptr, 
 		paint: ^Paint, 
-		composite_operation: CompositeOperationState, 
+		compositeOperation: CompositeOperationState, 
 		scissor: ^ScissorT,
 		verts: []Vertex,
 		fringe: f32,
@@ -277,14 +277,14 @@ __deletePathCache :: proc(c: PathCache) {
 }
 
 __setDevicePxRatio :: proc(ctx: ^Context, ratio: f32) {
-	ctx.tess_tol = 0.25 / ratio
-	ctx.dist_tol = 0.01 / ratio
-	ctx.fringe_width = 1.0 / ratio
-	ctx.device_px_ratio = ratio
+	ctx.tessTol = 0.25 / ratio
+	ctx.distTol = 0.01 / ratio
+	ctx.fringeWidth = 1.0 / ratio
+	ctx.devicePxRatio = ratio
 }
 
 __getState :: #force_inline proc(ctx: ^Context) -> ^State #no_bounds_check {
-	return &ctx.states[ctx.state_count - 1]
+	return &ctx.states[ctx.nstates - 1]
 }
 
 CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
@@ -297,8 +297,8 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 	Reset(ctx)
 	__setDevicePxRatio(ctx, 1)
 
-	assert(ctx.params.render_create != nil)
-	if !ctx.params.render_create(ctx.params.user_ptr) {
+	assert(ctx.params.renderCreate != nil)
+	if !ctx.params.renderCreate(ctx.params.userPtr) {
 		DeleteInternal(ctx)
 		panic("Nanovg - CreateInternal failed")
 	}
@@ -306,18 +306,18 @@ CreateInternal :: proc(params: Params) -> (ctx: ^Context) {
 	w := INIT_FONTIMAGE_SIZE
 	h := INIT_FONTIMAGE_SIZE
 	fontstash.Init(&ctx.fs, w, h, .TOPLEFT)
-	assert(ctx.params.render_create_texture != nil)
-	ctx.fs.user_data = ctx
+	assert(ctx.params.renderCreateTexture != nil)
+	ctx.fs.userData = ctx
 	
 	// handle to the image needs to be set to the new generated texture
-	ctx.fs.callback_resize = proc(data: rawptr, w, h: int) {
+	ctx.fs.callbackResize = proc(data: rawptr, w, h: int) {
 		ctx := cast(^Context) data
-		ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, ctx.fs.texture_data)
+		ctx.fontImages[0] = ctx.params.renderCreateTexture(ctx.params.userPtr, .Alpha, w, h, {}, ctx.fs.textureData)
 	}
 	
 	// texture atlas
-	ctx.font_images[0] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, w, h, {}, nil)
-	ctx.font_image_idx = 0
+	ctx.fontImages[0] = ctx.params.renderCreateTexture(ctx.params.userPtr, .Alpha, w, h, {}, nil)
+	ctx.fontImageIdx = 0
 
 	return
 }
@@ -326,14 +326,14 @@ DeleteInternal :: proc(ctx: ^Context) {
 	__deletePathCache(ctx.cache)
 	fontstash.Destroy(&ctx.fs)
 
-	for image in &ctx.font_images {
+	for image in &ctx.fontImages {
 		if image != 0 {
 			DeleteImage(ctx, image)
 		}
 	}
 
-	if ctx.params.render_delete != nil {
-		ctx.params.render_delete(ctx.params.user_ptr)
+	if ctx.params.renderDelete != nil {
+		ctx.params.renderDelete(ctx.params.userPtr)
 	}
 
 	free(ctx)
@@ -351,57 +351,56 @@ DeleteInternal :: proc(ctx: ^Context) {
 */
 BeginFrame :: proc(
 	ctx: ^Context,
-	window_width: f32,
-	window_height: f32,
-	device_pixel_ratio: f32,
+	windowWidth: f32,
+	windowHeight: f32,
+	devicePixelRatio: f32,
 ) {
-	ctx.state_count = 0
+	ctx.nstates = 0
 	Save(ctx)
 	Reset(ctx)
-	__setDevicePxRatio(ctx, device_pixel_ratio)
+	__setDevicePxRatio(ctx, devicePixelRatio)
 
-	assert(ctx.params.render_viewport != nil)
-	ctx.params.render_viewport(ctx.params.user_ptr, window_width, window_height, device_pixel_ratio)
+	assert(ctx.params.renderViewport != nil)
+	ctx.params.renderViewport(ctx.params.userPtr, windowWidth, windowHeight, devicePixelRatio)
 
-	// TODO render_viewport
-	ctx.draw_call_count = 0
-	ctx.fill_tri_count = 0
-	ctx.stroke_tri_count = 0
-	ctx.text_tri_count = 0
+	ctx.drawCallCount = 0
+	ctx.fillTriCount = 0
+	ctx.strokeTriCount = 0
+	ctx.textTriCount = 0
 }
 
 @(deferred_out=EndFrame)
 FrameScoped :: proc(
 	ctx: ^Context,
-	window_width: f32,
-	window_height: f32,
-	device_pixel_ratio: f32,
+	windowWidth: f32,
+	windowHeight: f32,
+	devicePixelRatio: f32,
 ) -> ^Context {
-	BeginFrame(ctx, window_width, window_height, device_pixel_ratio)
+	BeginFrame(ctx, windowWidth, windowHeight, devicePixelRatio)
 	return ctx
 }
 
 // Cancels drawing the current frame.
 CancelFrame :: proc(ctx: ^Context) {
-	assert(ctx.params.render_cancel != nil)
-	ctx.params.render_cancel(ctx.params.user_ptr)	
+	assert(ctx.params.renderCancel != nil)
+	ctx.params.renderCancel(ctx.params.userPtr)	
 }
 
 // Ends drawing flushing remaining render state.
 EndFrame :: proc(ctx: ^Context) {
 	// flush texture only once
-	if ctx.texture_dirty {
+	if ctx.textureDirty {
 		__flushTextTexture(ctx)
-		ctx.texture_dirty = false
+		ctx.textureDirty = false
 	}
 
-	assert(ctx.params.render_flush != nil)
-	ctx.params.render_flush(ctx.params.user_ptr)
+	assert(ctx.params.renderFlush != nil)
+	ctx.params.renderFlush(ctx.params.userPtr)
 
 	// delete textures with invalid size
-	if ctx.font_image_idx != 0 {
-		font_image := ctx.font_images[ctx.font_image_idx]
-		ctx.font_images[ctx.font_image_idx] = 0
+	if ctx.fontImageIdx != 0 {
+		font_image := ctx.fontImages[ctx.fontImageIdx]
+		ctx.fontImages[ctx.fontImageIdx] = 0
 
 		if font_image == 0 {
 			return
@@ -409,25 +408,25 @@ EndFrame :: proc(ctx: ^Context) {
 
 		iw, ih := ImageSize(ctx, font_image)
 		j: int
-		for i in 0..<ctx.font_image_idx {
-			if ctx.font_images[i] != 0 {
-				image := ctx.font_images[i]
-				ctx.font_images[i] = 0
+		for i in 0..<ctx.fontImageIdx {
+			if ctx.fontImages[i] != 0 {
+				image := ctx.fontImages[i]
+				ctx.fontImages[i] = 0
 				nw, nh := ImageSize(ctx, image)
 
 				if nw < iw || nh < ih {
 					DeleteImage(ctx, image)
 				} else {
-					ctx.font_images[j] = image
+					ctx.fontImages[j] = image
 					j += 1
 				}
 			}
 		}
 
 		// make current font image to first
-		ctx.font_images[j] = ctx.font_images[0]
-		ctx.font_images[0] = font_image
-		ctx.font_image_idx = 0
+		ctx.fontImages[j] = ctx.fontImages[0]
+		ctx.fontImages[0] = font_image
+		ctx.fontImageIdx = 0
 	}
 }
 
@@ -662,25 +661,25 @@ RadToDeg :: proc(rad: f32) -> f32 {
 // Pushes and saves the current render state into a state stack.
 // A matching nvgRestore() must be used to restore the state.
 Save :: proc(ctx: ^Context) {
-	if ctx.state_count >= MAX_STATES {
+	if ctx.nstates >= MAX_STATES {
 		return
 	}
 
 	// copy prior
-	if ctx.state_count > 0 {
-		ctx.states[ctx.state_count] = ctx.states[ctx.state_count - 1]
+	if ctx.nstates > 0 {
+		ctx.states[ctx.nstates] = ctx.states[ctx.nstates - 1]
 	}
 
-	ctx.state_count += 1
+	ctx.nstates += 1
 }
 
 // Pops and restores current render state.
 Restore :: proc(ctx: ^Context) {
-	if ctx.state_count <= 1 {
+	if ctx.nstates <= 1 {
 		return
 	}
 
-	ctx.state_count -= 1
+	ctx.nstates -= 1
 }
 
 // NOTE useful helper
@@ -694,8 +693,8 @@ __setPaintColor :: proc(p: ^Paint, color: Color) {
 	TransformIdentity(&p.xform)
 	p.radius = 0
 	p.feather = 1
-	p.inner_color = color
-	p.outer_color = color
+	p.innerColor = color
+	p.outerColor = color
 }
 
 // Resets current render state to default values. Does not affect the render state stack.
@@ -706,12 +705,12 @@ Reset :: proc(ctx: ^Context) {
 	__setPaintColor(&state.fill, RGBA(255, 255, 255, 255))
 	__setPaintColor(&state.stroke, RGBA(0, 0, 0, 255))
 
-	state.composite_operation = __compositeOperationState(.SOURCE_OVER)
-	state.shape_anti_alias = true
-	state.stroke_width = 1
-	state.miter_limit = 10
-	state.line_cap = .BUTT
-	state.line_join = .MITER
+	state.compositeOperation = __compositeOperationState(.SOURCE_OVER)
+	state.shapeAntiAlias = true
+	state.strokeWidth = 1
+	state.miterLimit = 10
+	state.lineCap = .BUTT
+	state.lineJoin = .MITER
 	state.alpha = 1
 	TransformIdentity(&state.xform)
 
@@ -719,13 +718,13 @@ Reset :: proc(ctx: ^Context) {
 	state.scissor.extent[1] = -1
 
 	// font settings
-	state.font_size = 16
-	state.letter_spacing = 0
-	state.line_height = 1
-	state.font_blur = 0
-	state.align_horizontal = .LEFT
-	state.align_vertical = .BASELINE
-	state.font_id = 0
+	state.fontSize = 16
+	state.letterSpacing = 0
+	state.lineHeight = 1
+	state.fontBlur = 0
+	state.alignHorizontal = .LEFT
+	state.alignVertical = .BASELINE
+	state.fontId = 0
 }
 
 ///////////////////////////////////////////////////////////
@@ -735,34 +734,34 @@ Reset :: proc(ctx: ^Context) {
 // Sets whether to draw antialias for nvgStroke() and nvgFill(). It's enabled by default.
 ShapeAntiAlias :: proc(ctx: ^Context, enabled: bool) {
 	state := __getState(ctx)
-	state.shape_anti_alias = enabled
+	state.shapeAntiAlias = enabled
 }
 
 // Sets the stroke width of the stroke style.
 StrokeWidth :: proc(ctx: ^Context, width: f32) {
 	state := __getState(ctx)
-	state.stroke_width = width		
+	state.strokeWidth = width		
 }
 
 // Sets the miter limit of the stroke style.
 // Miter limit controls when a sharp corner is beveled.
 MiterLimit :: proc(ctx: ^Context, limit: f32) {
 	state := __getState(ctx)
-	state.miter_limit = limit
+	state.miterLimit = limit
 }
 
 // Sets how the end of the line (cap) is drawn,
 // Can be one of: NVG_BUTT (default), NVG_ROUND, NVG_SQUARE.
 LineCap :: proc(ctx: ^Context, cap: LineCapType) {
 	state := __getState(ctx)
-	state.line_cap = cap
+	state.lineCap = cap
 }
 
 // Sets how sharp path corners are drawn.
 // Can be one of NVG_MITER (default), NVG_ROUND, NVG_BEVEL.
 LineJoin :: proc(ctx: ^Context, join: LineCapType) {
 	state := __getState(ctx)
-	state.line_join = join
+	state.lineJoin = join
 }
 
 // Sets the transparency applied to all rendered shapes.
@@ -892,7 +891,7 @@ CurrentTransform :: proc(ctx: ^Context, xform: ^Matrix) {
 
 // Creates image by loading it from the disk from specified file name.
 // Returns handle to the image.
-CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: ImageFlags) -> int {
+CreateImagePath :: proc(ctx: ^Context, filename: cstring, imageFlags: ImageFlags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -903,14 +902,14 @@ CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: ImageFlag
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := CreateImageRGBA(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRGBA(ctx, int(w), int(h), imageFlags, data)
 	stbi.image_free(img)
 	return image
 }
 
 // Creates image by loading it from the specified chunk of memory.
 // Returns handle to the image.
-CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: ImageFlags) -> int {
+CreateImageMem :: proc(ctx: ^Context, data: []byte, imageFlags: ImageFlags) -> int {
 	stbi.set_unpremultiply_on_load(1)
 	stbi.convert_iphone_png_to_rgb(1)
 	w, h, n: i32
@@ -921,7 +920,7 @@ CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: ImageFlags) -> 
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := CreateImageRGBA(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRGBA(ctx, int(w), int(h), imageFlags, data)
 	stbi.image_free(img)
 	return image
 }
@@ -930,40 +929,40 @@ CreateImage :: proc { CreateImagePath, CreateImageMem }
 
 // Creates image from specified image data.
 // Returns handle to the image.
-CreateImageRGBA :: proc(ctx: ^Context, w, h: int, image_flags: ImageFlags, data: []byte) -> int {
-	assert(ctx.params.render_create_texture != nil)
-	return ctx.params.render_create_texture(
-		ctx.params.user_ptr,
+CreateImageRGBA :: proc(ctx: ^Context, w, h: int, imageFlags: ImageFlags, data: []byte) -> int {
+	assert(ctx.params.renderCreateTexture != nil)
+	return ctx.params.renderCreateTexture(
+		ctx.params.userPtr,
 		.RGBA,
 		w, h,
-		image_flags,
+		imageFlags,
 		data,
 	)
 }
 
 // Updates image data specified by image handle.
 UpdateImage :: proc(ctx: ^Context, image: int, data: []byte) {
-	assert(ctx.params.render_get_texture_size != nil)
-	assert(ctx.params.render_update_texture != nil)
+	assert(ctx.params.renderGetTextureSize != nil)
+	assert(ctx.params.renderUpdateTexture != nil)
 	
 	w, h: int
-	found := ctx.params.render_get_texture_size(ctx.params.user_ptr, image, &w, &h)
+	found := ctx.params.renderGetTextureSize(ctx.params.userPtr, image, &w, &h)
 	if found {
-		ctx.params.render_update_texture(ctx.params.user_ptr, image, 0, 0, w, h, data)
+		ctx.params.renderUpdateTexture(ctx.params.userPtr, image, 0, 0, w, h, data)
 	}
 }
 
 // Returns the dimensions of a created image.
 ImageSize :: proc(ctx: ^Context, image: int) -> (w, h: int) {
-	assert(ctx.params.render_get_texture_size != nil)
-	ctx.params.render_get_texture_size(ctx.params.user_ptr, image, &w, &h)
+	assert(ctx.params.renderGetTextureSize != nil)
+	ctx.params.renderGetTextureSize(ctx.params.userPtr, image, &w, &h)
 	return
 }
 
 // Deletes created image.
 DeleteImage :: proc(ctx: ^Context, image: int) {
-	assert(ctx.params.render_delete_texture != nil)
-	ctx.params.render_delete_texture(ctx.params.user_ptr, image)
+	assert(ctx.params.renderDeleteTexture != nil)
+	ctx.params.renderDeleteTexture(ctx.params.userPtr, image)
 }
 
 ///////////////////////////////////////////////////////////
@@ -1010,8 +1009,8 @@ LinearGradient :: proc(
 
 	p.feather = max(1.0, d)
 
-	p.inner_color = icol
-	p.outer_color = ocol
+	p.innerColor = icol
+	p.outerColor = ocol
 
 	return
 }
@@ -1043,8 +1042,8 @@ RadialGradient :: proc(
 	p.radius = r
 	p.feather = max(1.0, f)
 
-	p.inner_color = icol
-	p.outer_color = ocol
+	p.innerColor = icol
+	p.outerColor = ocol
 
 	return 
 }
@@ -1072,8 +1071,8 @@ BoxGradient :: proc(
 	p.radius = r
 	p.feather = max(1.0, f)
 
-	p.inner_color = icol
-	p.outer_color = ocol
+	p.innerColor = icol
+	p.outerColor = ocol
 
 	return 
 }
@@ -1098,8 +1097,8 @@ ImagePattern :: proc(
 	p.extent[1] = h
 
 	p.image = image
-	p.inner_color = { 1,1,1,alpha }
-	p.outer_color = p.inner_color
+	p.innerColor = { 1,1,1,alpha }
+	p.outerColor = p.innerColor
 
 	return
 }
@@ -1217,17 +1216,17 @@ OP_STATE_TABLE :: [CompositeOperation][2]BlendFactor {
 __compositeOperationState :: proc(op: CompositeOperation) -> (res: CompositeOperationState) {
 	table := OP_STATE_TABLE
 	factors := table[op]
-	res.src_RGB = factors.x
-	res.dst_RGB = factors.y
-	res.src_alpha = factors.x
-	res.dst_alpha = factors.y
+	res.srcRGB = factors.x
+	res.dstRGB = factors.y
+	res.srcAlpha = factors.x
+	res.dstAlpha = factors.y
 	return
 }
 
 // Sets the composite operation. The op parameter should be one of NVGcompositeOperation.
 GlobalCompositeOperation :: proc(ctx: ^Context, op: CompositeOperation) {
 	state := __getState(ctx)
-	state.composite_operation = __compositeOperationState(op)
+	state.compositeOperation = __compositeOperationState(op)
 }
 
 // Sets the composite operation with custom pixel arithmetic. The parameters should be one of NVGblendFactor.
@@ -1238,19 +1237,19 @@ GlobalCompositeBlendFunc :: proc(ctx: ^Context, sfactor, dfactor: BlendFactor) {
 // Sets the composite operation with custom pixel arithmetic for RGB and alpha components separately. The parameters should be one of NVGblendFactor.
 GlobalCompositeBlendFuncSeparate :: proc(
 	ctx: ^Context,
-	src_RGB: BlendFactor,
-	dst_RGB: BlendFactor,
-	src_alpha: BlendFactor,
-	dst_alpha: BlendFactor,
+	srcRGB: BlendFactor,
+	dstRGB: BlendFactor,
+	srcAlpha: BlendFactor,
+	dstAlpha: BlendFactor,
 ) {
 	op := CompositeOperationState {
-		src_RGB,
-		dst_RGB,
-		src_alpha,
-		dst_alpha,
+		srcRGB,
+		dstRGB,
+		srcAlpha,
+		dstAlpha,
 	}
 	state := __getState(ctx)
-	state.composite_operation = op
+	state.compositeOperation = op
 }
 
 ///////////////////////////////////////////////////////////
@@ -1293,14 +1292,14 @@ __distPtSeg :: proc(x, y, px, py, qx, qy: f32) -> f32 {
 __appendCommands :: proc(ctx: ^Context, values: []f32) {
 	state := __getState(ctx)
 
-	if Command(values[0]) != .CLOSE && Command(values[0]) != .WINDING {
-		ctx.command_x = values[len(values) - 2]
-		ctx.command_y = values[len(values) - 1]
+	if Commands(values[0]) != .CLOSE && Commands(values[0]) != .WINDING {
+		ctx.commandx = values[len(values) - 2]
+		ctx.commandy = values[len(values) - 1]
 	}
 
 	i := 0
 	for i < len(values) {
-		cmd := Command(values[i])
+		cmd := Commands(values[i])
 
 		switch cmd {
 			case .MOVE_TO, .LINE_TO: {
@@ -1372,7 +1371,7 @@ __addPoint :: proc(ctx: ^Context, x, y: f32, flags: PointFlags) {
 	if path.count > 0 && len(ctx.cache.points) > 0 {
 		pt := __lastPoint(ctx)
 
-		if __ptEquals(pt.x, pt.y, x, y, ctx.dist_tol) {
+		if __ptEquals(pt.x, pt.y, x, y, ctx.distTol) {
 			pt.flags |= flags
 			return
 		}
@@ -1484,7 +1483,7 @@ __tesselateBezier :: proc(
 	d2 := abs(((x2 - x4) * dy - (y2 - y4) * dx))
 	d3 := abs(((x3 - x4) * dy - (y3 - y4) * dx))
 
-	if (d2 + d3)*(d2 + d3) < ctx.tess_tol * (dx*dx + dy*dy) {
+	if (d2 + d3)*(d2 + d3) < ctx.tessTol * (dx*dx + dy*dy) {
 		__addPoint(ctx, x4, y4, flags)
 		return
 	}
@@ -1508,7 +1507,7 @@ __flattenPaths :: proc(ctx: ^Context) {
 	// flatten
 	i := 0
 	for i < len(ctx.commands) {
-		cmd := Command(ctx.commands[i])
+		cmd := Commands(ctx.commands[i])
 		
 		switch cmd {
 			case .MOVE_TO: {
@@ -1566,7 +1565,7 @@ __flattenPaths :: proc(ctx: ^Context) {
 		// If the first and last points are the same, remove the last, mark as closed path.
 		p0 := &pts[path.count-1]
 		p1 := &pts[0]
-		if __ptEquals(p0.x,p0.y, p1.x,p1.y, ctx.dist_tol) {
+		if __ptEquals(p0.x,p0.y, p1.x,p1.y, ctx.distTol) {
 			path.count -= 1
 			p0 = &pts[path.count - 1]
 			path.closed = true
@@ -1880,8 +1879,8 @@ __roundCapEnd :: proc(
 __calculateJoins :: proc(
 	ctx: ^Context,
 	w: f32,
-	line_join: LineCapType,
-	miter_limit: f32,
+	lineJoin: LineCapType,
+	miterLimit: f32,
 ) {
 	cache := &ctx.cache
 	iw := f32(0)
@@ -1935,7 +1934,7 @@ __calculateJoins :: proc(
 
 			// Check to see if the corner needs to be beveled.
 			if .CORNER in p1.flags {
-				if (dmr2 * miter_limit*miter_limit) < 1.0 || line_join == .BEVEL || line_join == .ROUND {
+				if (dmr2 * miterLimit*miterLimit) < 1.0 || lineJoin == .BEVEL || lineJoin == .ROUND {
 					incl(&p1.flags, PointFlag.BEVEL)
 				}
 			}
@@ -1954,9 +1953,6 @@ __calculateJoins :: proc(
 
 // TODO could be done better? or not need dynamic
 __allocTempVerts :: proc(ctx: ^Context, nverts: int) -> []Vertex {
-	// old := len(ctx.cache.verts)
-	// resize(&ctx.cache.verts, len(ctx.cache.verts) + nverts)
-	// return ctx.cache.verts[old:old+nverts]
 	resize(&ctx.cache.verts, nverts)
 	return ctx.cache.verts[:]
 }
@@ -1965,15 +1961,15 @@ __expandStroke :: proc(
 	ctx: ^Context,
 	w: f32,
 	fringe: f32,
-	line_cap: LineCapType,
-	line_join: LineCapType,
-	miter_limit: f32,	
+	lineCap: LineCapType,
+	lineJoin: LineCapType,
+	miterLimit: f32,	
 ) -> bool {
 	cache := &ctx.cache
 	aa := fringe
 	u0 := f32(0.0)
 	u1 := f32(1.0)
-	ncap := __curveDivs(w, math.PI, ctx.tess_tol)	// Calculate divisions per half circle.
+	ncap := __curveDivs(w, math.PI, ctx.tessTol)	// Calculate divisions per half circle.
 
 	w := w
 	w += aa * 0.5
@@ -1984,7 +1980,7 @@ __expandStroke :: proc(
 		u1 = 0.5
 	}
 
-	__calculateJoins(ctx, w, line_join, miter_limit)
+	__calculateJoins(ctx, w, lineJoin, miterLimit)
 
 	// Calculate max vertex usage.
 	cverts := 0
@@ -1992,7 +1988,7 @@ __expandStroke :: proc(
 		loop := path.closed
 	
 		// TODO check if f32 calculation necessary?	
-		if line_join == .ROUND {
+		if lineJoin == .ROUND {
 			cverts += (path.count + path.nbevel * int(ncap + 2) + 1) * 2 // plus one for loop
 		} else {
 			cverts += (path.count + path.nbevel*5 + 1) * 2 // plus one for loop
@@ -2000,7 +1996,7 @@ __expandStroke :: proc(
 
 		if !loop {
 			// space for caps
-			if line_cap == .ROUND {
+			if lineCap == .ROUND {
 				cverts += int(ncap*2 + 2)*2
 			} else {
 				cverts += (3 + 3)*2
@@ -2046,11 +2042,11 @@ __expandStroke :: proc(
 			dy = p1.y - p0.y
 			__normalize(&dx, &dy)
 
-			if line_cap == .BUTT {
+			if lineCap == .BUTT {
 				__buttCapStart(&dst, p0, dx, dy, w, -aa*0.5, aa, u0, u1)
-			}	else if line_cap == .BUTT || line_cap == .SQUARE {
+			}	else if lineCap == .BUTT || lineCap == .SQUARE {
 				__buttCapStart(&dst, p0, dx, dy, w, w-aa, aa, u0, u1)
-			}	else if line_cap == .ROUND {
+			}	else if lineCap == .ROUND {
 				__roundCapStart(&dst, p0, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
@@ -2059,7 +2055,7 @@ __expandStroke :: proc(
 			// TODO check this
 			// if ((p1.flags & (NVG_PT_BEVEL | NVG_PR_INNERBEVEL)) != 0) {
 			if (.BEVEL in p1.flags) || (.INNER_BEVEL in p1.flags) {
-				if line_join == .ROUND {
+				if lineJoin == .ROUND {
 					__roundJoin(&dst, p0, p1, w, w, u0, u1, int(ncap))
 				} else {
 					__bevelJoin(&dst, p0, p1, w, w, u0, u1)
@@ -2084,11 +2080,11 @@ __expandStroke :: proc(
 			dy = p1.y - p0.y
 			__normalize(&dx, &dy)
 
-			if line_cap == .BUTT {
+			if lineCap == .BUTT {
 				__buttCapEnd(&dst, p1, dx, dy, w, -aa*0.5, aa, u0, u1)
-			}	else if line_cap == .BUTT || line_cap == .SQUARE {
+			}	else if lineCap == .BUTT || lineCap == .SQUARE {
 				__buttCapEnd(&dst, p1, dx, dy, w, w-aa, aa, u0, u1)
-			}	else if line_cap == .ROUND {
+			}	else if lineCap == .ROUND {
 				__roundCapEnd(&dst, p1, dx, dy, w, int(ncap), u0, u1)
 			}
 		}
@@ -2107,13 +2103,13 @@ __expandStroke :: proc(
 __expandFill :: proc(
 	ctx: ^Context,
 	w: f32,
-	line_join: LineCapType,
-	miter_limit: f32,
+	lineJoin: LineCapType,
+	miterLimit: f32,
 ) -> bool {
 	cache := &ctx.cache
-	aa := ctx.fringe_width
+	aa := ctx.fringeWidth
 	fringe := w > 0.0
-	__calculateJoins(ctx, w, line_join, miter_limit)
+	__calculateJoins(ctx, w, lineJoin, miterLimit)
 
 	// Calculate max vertex usage.
 	cverts := 0
@@ -2250,7 +2246,7 @@ __expandFill :: proc(
 ///////////////////////////////////////////////////////////
 
 // NOTE: helper to go from Command to f32
-__cmdf :: #force_inline proc(cmd: Command) -> f32 {
+__cmdf :: #force_inline proc(cmd: Commands) -> f32 {
 	return f32(cmd)
 }
 
@@ -2300,8 +2296,8 @@ BezierTo :: proc(
 
 // Adds quadratic bezier segment from last point in the path via a control point to the specified point.
 QuadTo :: proc(ctx: ^Context, cx, cy, x, y: f32) {
-	x0 := ctx.command_x
-	y0 := ctx.command_y
+	x0 := ctx.commandx
+	y0 := ctx.commandy
 	values := [?]f32 {
 		__cmdf(.BEZIER_TO),
 		x0 + 2 / 3 * (cx - x0), 
@@ -2325,13 +2321,13 @@ ArcTo :: proc(
 		return
 	}
 
-	x0 := ctx.command_x
-	y0 := ctx.command_y
+	x0 := ctx.commandx
+	y0 := ctx.commandy
 	// Handle degenerate cases.
-	if __ptEquals(x0,y0, x1,y1, ctx.dist_tol) ||
-		__ptEquals(x1,y1, x2,y2, ctx.dist_tol) ||
-		__distPtSeg(x1,y1, x0,y0, x2,y2) < ctx.dist_tol*ctx.dist_tol ||
-		radius < ctx.dist_tol {
+	if __ptEquals(x0,y0, x1,y1, ctx.distTol) ||
+		__ptEquals(x1,y1, x2,y2, ctx.distTol) ||
+		__distPtSeg(x1,y1, x0,y0, x2,y2) < ctx.distTol*ctx.distTol ||
+		radius < ctx.distTol {
 		LineTo(ctx, x1, y1)
 		return
 	}
@@ -2375,7 +2371,7 @@ ArcTo :: proc(
 // and the arc is drawn from angle a0 to a1, and swept in direction dir (NVG_CCW, or NVG_CW).
 // Angles are specified in radians.
 Arc :: proc(ctx: ^Context, cx, cy, r, a0, a1: f32, dir: Winding) {
-	move: Command = .LINE_TO if len(ctx.commands) > 0 else .MOVE_TO
+	move: Commands = .LINE_TO if len(ctx.commands) > 0 else .MOVE_TO
 
 	// Clamp angles
 	da := a1 - a0
@@ -2541,31 +2537,31 @@ Fill :: proc(ctx: ^Context) {
 
 	__flattenPaths(ctx)
 
-	if ctx.params.edge_anti_alias && state.shape_anti_alias {
-		__expandFill(ctx, ctx.fringe_width, .MITER, 2.4)
+	if ctx.params.edgeAntiAlias && state.shapeAntiAlias {
+		__expandFill(ctx, ctx.fringeWidth, .MITER, 2.4)
 	} else {
 		__expandFill(ctx, 0, .MITER, 2.4)
 	}
 
 	// apply global alpha
-	fill_paint.inner_color.a *= state.alpha
-	fill_paint.outer_color.a *= state.alpha
+	fill_paint.innerColor.a *= state.alpha
+	fill_paint.outerColor.a *= state.alpha
 
-	assert(ctx.params.render_fill != nil)
-	ctx.params.render_fill(
-		ctx.params.user_ptr,
+	assert(ctx.params.renderFill != nil)
+	ctx.params.renderFill(
+		ctx.params.userPtr,
 		&fill_paint,
-		state.composite_operation,
+		state.compositeOperation,
 		&state.scissor,
-		ctx.fringe_width,
+		ctx.fringeWidth,
 		ctx.cache.bounds,
 		ctx.cache.paths[:],
 	)
 
 	for path in &ctx.cache.paths {
-		ctx.fill_tri_count += len(path.fill) - 2
-		ctx.fill_tri_count += len(path.stroke) - 2
-		ctx.draw_call_count += 2
+		ctx.fillTriCount += len(path.fill) - 2
+		ctx.fillTriCount += len(path.stroke) - 2
+		ctx.drawCallCount += 2
 	}
 }
 
@@ -2573,44 +2569,44 @@ Fill :: proc(ctx: ^Context) {
 Stroke :: proc(ctx: ^Context) {
 	state := __getState(ctx)
 	scale := __getAverageScale(state.xform[:])
-	stroke_width := clamp(state.stroke_width * scale, 0, 200)
+	strokeWidth := clamp(state.strokeWidth * scale, 0, 200)
 	stroke_paint := state.stroke
 
-	if stroke_width < ctx.fringe_width {
+	if strokeWidth < ctx.fringeWidth {
 		// If the stroke width is less than pixel size, use alpha to emulate coverage.
 		// Since coverage is area, scale by alpha*alpha.
-		alpha := clamp(stroke_width / ctx.fringe_width, 0, 1)
-		stroke_paint.inner_color.a *= alpha * alpha
-		stroke_paint.outer_color.a *= alpha * alpha
-		stroke_width = ctx.fringe_width
+		alpha := clamp(strokeWidth / ctx.fringeWidth, 0, 1)
+		stroke_paint.innerColor.a *= alpha * alpha
+		stroke_paint.outerColor.a *= alpha * alpha
+		strokeWidth = ctx.fringeWidth
 	}
 
 	// apply global alpha
-	stroke_paint.inner_color.a *= state.alpha
-	stroke_paint.outer_color.a *= state.alpha
+	stroke_paint.innerColor.a *= state.alpha
+	stroke_paint.outerColor.a *= state.alpha
 
 	__flattenPaths(ctx)
 
-	if ctx.params.edge_anti_alias && state.shape_anti_alias {
-		__expandStroke(ctx, stroke_width * 0.5, ctx.fringe_width, state.line_cap, state.line_join, state.miter_limit)
+	if ctx.params.edgeAntiAlias && state.shapeAntiAlias {
+		__expandStroke(ctx, strokeWidth * 0.5, ctx.fringeWidth, state.lineCap, state.lineJoin, state.miterLimit)
 	} else {
-		__expandStroke(ctx, stroke_width * 0.5, 0, state.line_cap, state.line_join, state.miter_limit)
+		__expandStroke(ctx, strokeWidth * 0.5, 0, state.lineCap, state.lineJoin, state.miterLimit)
 	}	
 
-	assert(ctx.params.render_stroke != nil)
-	ctx.params.render_stroke(
-		ctx.params.user_ptr,
+	assert(ctx.params.renderStroke != nil)
+	ctx.params.renderStroke(
+		ctx.params.userPtr,
 		&stroke_paint,
-		state.composite_operation,
+		state.compositeOperation,
 		&state.scissor,
-		ctx.fringe_width,
-		stroke_width,
+		ctx.fringeWidth,
+		strokeWidth,
 		ctx.cache.paths[:],
 	)
 
 	for path in &ctx.cache.paths {
-		ctx.stroke_tri_count += len(path.stroke) - 2
-		ctx.draw_call_count += 1
+		ctx.strokeTriCount += len(path.stroke) - 2
+		ctx.drawCallCount += 1
 	}	
 }
 
@@ -2722,56 +2718,56 @@ ResetFallbackFonts :: proc(ctx: ^Context, base_font: string) {
 // Sets the font size of current text style.
 FontSize :: proc(ctx: ^Context, size: f32) {
 	state := __getState(ctx)
-	state.font_size = size
+	state.fontSize = size
 }
 
 // Sets the blur of current text style.
 FontBlur :: proc(ctx: ^Context, blur: f32) {
 	state := __getState(ctx)
-	state.font_blur = blur
+	state.fontBlur = blur
 }
 
 // Sets the letter spacing of current text style.
 TextLetterSpacing :: proc(ctx: ^Context, spacing: f32) {
 	state := __getState(ctx)
-	state.letter_spacing = spacing
+	state.letterSpacing = spacing
 }
 
 // Sets the proportional line height of current text style. The line height is specified as multiple of font size.
-TextLineHeight :: proc(ctx: ^Context, line_height: f32) {
+TextLineHeight :: proc(ctx: ^Context, lineHeight: f32) {
 	state := __getState(ctx)
-	state.line_height = line_height
+	state.lineHeight = lineHeight
 }
 
 // Sets the horizontal text align of current text style
 TextAlignHorizontal :: proc(ctx: ^Context, align: AlignHorizontal) {
 	state := __getState(ctx)
-	state.align_horizontal = align
+	state.alignHorizontal = align
 }
 
 // Sets the vertical text align of current text style
 TextAlignVertical :: proc(ctx: ^Context, align: AlignVertical) {
 	state := __getState(ctx)
-	state.align_vertical = align
+	state.alignVertical = align
 }
 
 // Sets the text align of current text style, see NVGalign for options.
 TextAlign :: proc(ctx: ^Context, ah: AlignHorizontal, av: AlignVertical) {
 	state := __getState(ctx)
-	state.align_horizontal = ah
-	state.align_vertical = av
+	state.alignHorizontal = ah
+	state.alignVertical = av
 }
 
 // Sets the font face based on specified name of current text style.
 FontFaceId :: proc(ctx: ^Context, font: int) {
 	state := __getState(ctx)
-	state.font_id = font
+	state.fontId = font
 }
 
 // Sets the font face based on specified name of current text style.
 FontFace :: proc(ctx: ^Context, font: string) {
 	state := __getState(ctx)
-	state.font_id = fontstash.GetFontByName(&ctx.fs, font)
+	state.fontId = fontstash.GetFontByName(&ctx.fs, font)
 }
 
 __quantize :: proc(a, d: f32) -> f32 {
@@ -2784,20 +2780,20 @@ __getFontScale :: proc(state: ^State) -> f32 {
 
 __flushTextTexture :: proc(ctx: ^Context) {
 	dirty: [4]f32
-	assert(ctx.params.render_update_texture != nil)
+	assert(ctx.params.renderUpdateTexture != nil)
 
 
 	if fontstash.ValidateTexture(&ctx.fs, &dirty) {
-		font_image := ctx.font_images[ctx.font_image_idx]
+		font_image := ctx.fontImages[ctx.fontImageIdx]
 		
 		// Update texture
 		if font_image != 0 {
-			data := ctx.fs.texture_data
+			data := ctx.fs.textureData
 			x := dirty[0]
 			y := dirty[1]
 			w := dirty[2] - dirty[0]
 			h := dirty[3] - dirty[1]
-			ctx.params.render_update_texture(ctx.params.user_ptr, font_image, int(x), int(y), int(w), int(h), data)
+			ctx.params.renderUpdateTexture(ctx.params.userPtr, font_image, int(x), int(y), int(w), int(h), data)
 		}
 	}
 }
@@ -2805,16 +2801,16 @@ __flushTextTexture :: proc(ctx: ^Context) {
 __allocTextAtlas :: proc(ctx: ^Context) -> bool {
 	__flushTextTexture(ctx)
 	
-	if ctx.font_image_idx >= MAX_FONTIMAGES - 1 {
+	if ctx.fontImageIdx >= MAX_FONTIMAGES - 1 {
 		return false
 	}
 	
 	// if next fontImage already have a texture
 	iw, ih: int
-	if ctx.font_images[ctx.font_image_idx+1] != 0 {
-		iw, ih = ImageSize(ctx, ctx.font_images[ctx.font_image_idx+1])
+	if ctx.fontImages[ctx.fontImageIdx+1] != 0 {
+		iw, ih = ImageSize(ctx, ctx.fontImages[ctx.fontImageIdx+1])
 	} else { // calculate the new font image size and create it.
-		iw, ih = ImageSize(ctx, ctx.font_images[ctx.font_image_idx])
+		iw, ih = ImageSize(ctx, ctx.fontImages[ctx.fontImageIdx])
 		
 		if iw > ih {
 			ih *= 2
@@ -2827,10 +2823,10 @@ __allocTextAtlas :: proc(ctx: ^Context) -> bool {
 			ih = MAX_FONTIMAGE_SIZE
 		}
 
-		ctx.font_images[ctx.font_image_idx + 1] = ctx.params.render_create_texture(ctx.params.user_ptr, .Alpha, iw, ih, {}, nil)
+		ctx.fontImages[ctx.fontImageIdx + 1] = ctx.params.renderCreateTexture(ctx.params.userPtr, .Alpha, iw, ih, {}, nil)
 	}
 
-	ctx.font_image_idx += 1
+	ctx.fontImageIdx += 1
 	fontstash.ResetAtlas(&ctx.fs, iw, ih)
 
 	return true
@@ -2846,16 +2842,16 @@ __renderText :: proc(ctx: ^Context, verts: []Vertex) {
 	paint := state.fill
 
 	// Render triangles.
-	paint.image = ctx.font_images[ctx.font_image_idx]
+	paint.image = ctx.fontImages[ctx.fontImageIdx]
 
 	// Apply global alpha
-	paint.inner_color.a *= state.alpha
-	paint.outer_color.a *= state.alpha
+	paint.innerColor.a *= state.alpha
+	paint.outerColor.a *= state.alpha
 
-	ctx.params.render_triangles(ctx.params.user_ptr, &paint, state.composite_operation, &state.scissor, verts, ctx.fringe_width)
+	ctx.params.renderTriangles(ctx.params.userPtr, &paint, state.compositeOperation, &state.scissor, verts, ctx.fringeWidth)
 	
-	ctx.draw_call_count += 1
-	ctx.text_tri_count += len(verts) / 3
+	ctx.drawCallCount += 1
+	ctx.textTriCount += len(verts) / 3
 }
 
 __isTransformFlipped :: proc(xform: []f32) -> bool {
@@ -2866,25 +2862,25 @@ __isTransformFlipped :: proc(xform: []f32) -> bool {
 // draw a single codepoint, useful for icons
 TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := f32(1.0) / scale
 	is_flipped := __isTransformFlipped(state.xform[:])
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		return x
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size * scale)
-	fontstash.SetSpacing(fs, state.letter_spacing * scale)
-	fontstash.SetBlur(fs, state.font_blur * scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize * scale)
+	fontstash.SetSpacing(fs, state.letterSpacing * scale)
+	fontstash.SetBlur(fs, state.fontBlur * scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
 	// fontstash internals
 	fstate := fontstash.__getState(fs)
-	font := fontstash.__getFont(fs, state.font_id)
+	font := fontstash.__getFont(fs, state.fontId)
 	isize := i16(fstate.size * 10)
 	iblur := i16(fstate.blur)
 	glyph := fontstash.__getGlyph(fs, font, codepoint, isize, iblur)
@@ -2937,7 +2933,7 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 		verts[4] = { c[6], c[7], q.s0, q.t1 }
 		verts[5] = { c[4], c[5], q.s1, q.t1 }
 
-		ctx.texture_dirty = true
+		ctx.textureDirty = true
 		__renderText(ctx, verts[:])
 	}
 
@@ -2947,21 +2943,21 @@ TextIcon :: proc(ctx: ^Context, x, y: f32, codepoint: rune) -> f32 {
 // Draws text string at specified location. If end is specified only the sub-string up to the end is drawn.
 Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := f32(1.0) / scale
 	is_flipped := __isTransformFlipped(state.xform[:])
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		return x
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size * scale)
-	fontstash.SetSpacing(fs, state.letter_spacing * scale)
-	fontstash.SetBlur(fs, state.font_blur * scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize * scale)
+	fontstash.SetSpacing(fs, state.letterSpacing * scale)
+	fontstash.SetBlur(fs, state.fontBlur * scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
 	cverts := max(2, len(text)) * 6 // conservative estimate.
 	verts := __allocTempVerts(ctx, cverts)
@@ -2973,7 +2969,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 	for fontstash.TextIterNext(&ctx.fs, &iter, &q) {
 		c: [4 * 2]f32
 		
-		if iter.previous_glyph_index == -1 { // can not retrieve glyph?
+		if iter.previousGlyphIndex == -1 { // can not retrieve glyph?
 			if nverts != 0 {
 				__renderText(ctx, verts[:])
 				nverts = 0
@@ -2986,7 +2982,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 			iter = prev_iter
 			fontstash.TextIterNext(fs, &iter, &q) // try again
 			
-			if iter.previous_glyph_index == -1 {
+			if iter.previousGlyphIndex == -1 {
 				// still can not find glyph?
 				break
 			} 
@@ -3016,7 +3012,7 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 		}
 	}
 
-	ctx.texture_dirty = true
+	ctx.textureDirty = true
 	__renderText(ctx, verts[:nverts])
 
 	return iter.nextx / scale
@@ -3024,27 +3020,27 @@ Text :: proc(ctx: ^Context, x, y: f32, text: string) -> f32 {
 
 // Returns the vertical metrics based on the current text style.
 // Measured values are returned in local coordinate space.
-TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, line_height: f32) {
+TextMetrics :: proc(ctx: ^Context) -> (ascender, descender, lineHeight: f32) {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := f32(1.0) / scale
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		return
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size*scale)
-	fontstash.SetSpacing(fs, state.letter_spacing*scale)
-	fontstash.SetBlur(fs, state.font_blur*scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize*scale)
+	fontstash.SetSpacing(fs, state.letterSpacing*scale)
+	fontstash.SetBlur(fs, state.fontBlur*scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
-	ascender, descender, line_height = fontstash.VerticalMetrics(fs)
+	ascender, descender, lineHeight = fontstash.VerticalMetrics(fs)
 	ascender *= invscale
 	descender *= invscale
-	line_height *= invscale
+	lineHeight *= invscale
 	return
 }
 
@@ -3059,20 +3055,20 @@ TextBounds :: proc(
 	bounds: ^[4]f32 = nil,
 ) -> (advance: f32) {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := f32(1.0) / scale
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		return {}
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size*scale)
-	fontstash.SetSpacing(fs, state.letter_spacing*scale)
-	fontstash.SetBlur(fs, state.font_blur*scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize*scale)
+	fontstash.SetSpacing(fs, state.letterSpacing*scale)
+	fontstash.SetBlur(fs, state.fontBlur*scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
 	width := fontstash.TextBounds(fs, input, x * scale, y * scale, bounds)
 	
@@ -3119,14 +3115,14 @@ TextBox :: proc(
 	state := __getState(ctx)
 	rows: [2]Text_Row
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		return
 	} 
 
-	_, _, line_height := TextMetrics(ctx)
-	old_align := state.align_horizontal
-	defer state.align_horizontal = old_align
-	state.align_horizontal = .LEFT
+	_, _, lineHeight := TextMetrics(ctx)
+	old_align := state.alignHorizontal
+	defer state.alignHorizontal = old_align
+	state.alignHorizontal = .LEFT
 	rows_mod := rows[:]
 
 	y := y
@@ -3135,7 +3131,7 @@ TextBox :: proc(
 		for i in 0..<nrows {
 			row := &rows[i]
 			Text(ctx, x, y, input_last[row.start:row.end])		
-			y += line_height * state.line_height
+			y += lineHeight * state.lineHeight
 		}
 	}
 }
@@ -3151,7 +3147,7 @@ TextBreakLines :: proc(
 	rows: ^[]Text_Row,
 ) -> (nrows: int, last: string, ok: bool) {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := 1.0 / scale
 
 	row_start_x, row_width, row_min_x, row_max_x: f32
@@ -3168,17 +3164,17 @@ TextBreakLines :: proc(
 	ptype := Codepoint_Type.Space
 	pcodepoint: rune
 
-	if max_rows == 0 || state.font_id == -1 || len(text) == 0 {
+	if max_rows == 0 || state.fontId == -1 || len(text) == 0 {
 		return
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size * scale)
-	fontstash.SetSpacing(fs, state.letter_spacing * scale)
-	fontstash.SetBlur(fs, state.font_blur * scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize * scale)
+	fontstash.SetSpacing(fs, state.letterSpacing * scale)
+	fontstash.SetBlur(fs, state.fontBlur * scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
 	break_row_width := break_row_width * scale
 	iter := fontstash.TextIterInit(fs, 0, 0, text^)
@@ -3187,7 +3183,7 @@ TextBreakLines :: proc(
 	stopped_early: bool
 
 	for fontstash.TextIterNext(fs, &iter, &q) {
-		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
+		if iter.previousGlyphIndex < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
 			iter = prev_iter
 			fontstash.TextIterNext(fs, &iter, &q) // try again
 		}
@@ -3386,10 +3382,10 @@ TextBoxBounds :: proc(
 ) {
 	state := __getState(ctx)
 	rows: [2]Text_Row
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 	invscale := f32(1.0) / scale
 
-	if state.font_id == -1 {
+	if state.fontId == -1 {
 		if bounds != nil {
 			bounds^ = {}
 		}
@@ -3398,23 +3394,23 @@ TextBoxBounds :: proc(
 	}
 
 	// alignment
-	halign := state.align_horizontal
-	valign := state.align_vertical
-	old_align := state.align_horizontal
-	defer state.align_horizontal = old_align
-	state.align_horizontal = .LEFT
+	halign := state.alignHorizontal
+	valign := state.alignVertical
+	old_align := state.alignHorizontal
+	defer state.alignHorizontal = old_align
+	state.alignHorizontal = .LEFT
 
 	_, _, lineh := TextMetrics(ctx)
 	minx, maxx := x, x
 	miny, maxy := y, y
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size * scale)
-	fontstash.SetSpacing(fs, state.letter_spacing * scale)
-	fontstash.SetBlur(fs, state.font_blur * scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize * scale)
+	fontstash.SetSpacing(fs, state.letterSpacing * scale)
+	fontstash.SetBlur(fs, state.fontBlur * scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 	rminy, rmaxy := fontstash.LineBounds(fs, 0)
 	rminy *= invscale
 	rmaxy *= invscale
@@ -3443,7 +3439,7 @@ TextBoxBounds :: proc(
 			miny = min(miny, y + rminy)
 			maxy = max(maxy, y + rmaxy)
 
-			y += lineh * state.line_height
+			y += lineh * state.lineHeight
 		}
 	}
 
@@ -3467,26 +3463,26 @@ TextGlyphPositions :: proc(
 	positions: ^[]Glyph_Position,
 ) -> int {
 	state := __getState(ctx)
-	scale := __getFontScale(state) * ctx.device_px_ratio
+	scale := __getFontScale(state) * ctx.devicePxRatio
 
-	if state.font_id == -1 || len(text) == 0 {
+	if state.fontId == -1 || len(text) == 0 {
 		return 0
 	}
 
 	fs := &ctx.fs
-	fontstash.SetSize(fs, state.font_size*scale)
-	fontstash.SetSpacing(fs, state.letter_spacing*scale)
-	fontstash.SetBlur(fs, state.font_blur*scale)
-	fontstash.SetAlignHorizontal(fs, state.align_horizontal)
-	fontstash.SetAlignVertical(fs, state.align_vertical)
-	fontstash.SetFont(fs, state.font_id)
+	fontstash.SetSize(fs, state.fontSize*scale)
+	fontstash.SetSpacing(fs, state.letterSpacing*scale)
+	fontstash.SetBlur(fs, state.fontBlur*scale)
+	fontstash.SetAlignHorizontal(fs, state.alignHorizontal)
+	fontstash.SetAlignVertical(fs, state.alignVertical)
+	fontstash.SetFont(fs, state.fontId)
 
 	iter := fontstash.TextIterInit(fs, 0, 0, text)
 	prev_iter := iter
 	q: fontstash.Quad
 	npos: int
 	for fontstash.TextIterNext(fs, &iter, &q) {
-		if iter.previous_glyph_index < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
+		if iter.previousGlyphIndex < 0 && __allocTextAtlas(ctx) { // can not retrieve glyph?
 			iter = prev_iter
 			fontstash.TextIterNext(fs, &iter, &q) // try again
 		}
