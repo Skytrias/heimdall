@@ -1345,3 +1345,110 @@ Create :: proc(flags: Create_Flags) -> ^nvg.Context {
 Destroy :: proc(ctx: ^nvg.Context) {
 	nvg.DeleteInternal(ctx)
 }
+
+CreateImageFromHandle :: proc(ctx: ^nvg.Context, textureId: u32, w, h: int, imageFlags: Image_Flags) -> int {
+	gctx := cast(^Context) ctx.params.user_ptr
+	tex := __allocTexture(gctx)
+	tex.type = .RGBA
+	tex.tex = textureId
+	tex.flags = imageFlags
+	tex.width = w
+	tex.height = h
+	return tex.id
+}
+
+ImageHandle :: proc(ctx: ^nvg.Context, textureId: int) -> u32 {
+	gctx := cast(^Context) ctx.params.user_ptr
+	tex := __findTexture(gctx, textureId)
+	return tex.tex
+}
+
+// framebuffer additional
+
+framebuffer :: struct {
+	ctx: ^nvg.Context,
+	fbo: u32,
+	rbo: u32,
+	texture: u32,
+	image: int,
+}
+
+DEFAULT_FBO :: 100_000
+defaultFBO := i32(DEFAULT_FBO)
+
+// helper function to create GL frame buffer to render to
+BindFramebuffer :: proc(fb: ^framebuffer) {
+	if defaultFBO == DEFAULT_FBO {
+		gl.GetIntegerv(gl.FRAMEBUFFER_BINDING, &defaultFBO)
+	}
+	gl.BindFramebuffer(gl.FRAMEBUFFER, fb != nil ? fb.fbo : u32(defaultFBO))
+}
+
+CreateFramebuffer :: proc(ctx: ^nvg.Context, w, h: int, imageFlags: Image_Flags) -> (fb: framebuffer) {
+	defaultFBO: i32
+	defaultRBO: i32
+	gl.GetIntegerv(gl.FRAMEBUFFER_BINDING, &defaultFBO)
+	gl.GetIntegerv(gl.RENDERBUFFER_BINDING, &defaultRBO)
+
+	imageFlags := imageFlags
+	incl(&imageFlags, Image_Flags { .Flip_Y, .Premultiplied })
+	fb.image = nvg.CreateImageRGBA(ctx, w, h, imageFlags, nil)
+	fb.texture = ImageHandle(ctx, fb.image)
+	fb.ctx = ctx
+
+	// frame buffer object
+	gl.GenFramebuffers(1, &fb.fbo)
+	gl.BindFramebuffer(gl.FRAMEBUFFER, fb.fbo)
+
+	// render buffer object
+	gl.GenRenderbuffers(1, &fb.rbo)
+	gl.BindRenderbuffer(gl.RENDERBUFFER, fb.rbo)
+	gl.RenderbufferStorage(gl.RENDERBUFFER, gl.STENCIL_INDEX8, i32(w), i32(h))
+
+	// combine all
+	gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fb.texture, 0)
+	gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.STENCIL_ATTACHMENT, gl.RENDERBUFFER, fb.rbo)
+
+	if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+// #ifdef gl.DEPTH24_STENCIL8
+		// If gl.STENCIL_INDEX8 is not supported, try gl.DEPTH24_STENCIL8 as a fallback.
+		// Some graphics cards require a depth buffer along with a stencil.
+		gl.RenderbufferStorage(gl.RENDERBUFFER, gl.DEPTH24_STENCIL8, i32(w), i32(h))
+		gl.FramebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fb.texture, 0)
+		gl.FramebufferRenderbuffer(gl.FRAMEBUFFER, gl.STENCIL_ATTACHMENT, gl.RENDERBUFFER, fb.rbo)
+
+		if gl.CheckFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE {
+			fmt.eprintln("ERROR")
+		}
+// #endif // gl.DEPTH24_STENCIL8
+// 			goto error
+	}
+
+	gl.BindFramebuffer(gl.FRAMEBUFFER, u32(defaultFBO))
+	gl.BindRenderbuffer(gl.RENDERBUFFER, u32(defaultRBO))
+	return 
+}
+
+DeleteFramebuffer :: proc(fb: ^framebuffer) {
+	if fb == nil {
+		return
+	}
+
+	if fb.fbo != 0 {
+		gl.DeleteFramebuffers(1, &fb.fbo)
+	}
+	
+	if fb.rbo != 0 {
+		gl.DeleteRenderbuffers(1, &fb.rbo)
+	}
+	
+	if fb.image >= 0 {
+		nvg.DeleteImage(fb.ctx, fb.image)
+	}
+
+	fb.ctx = nil
+	fb.fbo = 0
+	fb.rbo = 0
+	fb.texture = 0
+	fb.image = -1
+}

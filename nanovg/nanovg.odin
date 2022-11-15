@@ -372,6 +372,17 @@ BeginFrame :: proc(
 	ctx.text_tri_count = 0
 }
 
+@(deferred_out=EndFrame)
+FrameScoped :: proc(
+	ctx: ^Context,
+	window_width: f32,
+	window_height: f32,
+	device_pixel_ratio: f32,
+) -> ^Context {
+	BeginFrame(ctx, window_width, window_height, device_pixel_ratio)
+	return ctx
+}
+
 // Cancels drawing the current frame.
 CancelFrame :: proc(ctx: ^Context) {
 	assert(ctx.params.render_cancel != nil)
@@ -894,7 +905,7 @@ CreateImagePath :: proc(ctx: ^Context, filename: cstring, image_flags: Image_Fla
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := CreateImageRgba(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRGBA(ctx, int(w), int(h), image_flags, data)
 	stbi.image_free(img)
 	return image
 }
@@ -912,7 +923,7 @@ CreateImageMem :: proc(ctx: ^Context, data: []byte, image_flags: Image_Flags) ->
 	}
 
 	data := mem.slice_ptr(img, int(w) * int(h) * int(n))
-	image := CreateImageRgba(ctx, int(w), int(h), image_flags, data)
+	image := CreateImageRGBA(ctx, int(w), int(h), image_flags, data)
 	stbi.image_free(img)
 	return image
 }
@@ -921,7 +932,7 @@ CreateImage :: proc { CreateImagePath, CreateImageMem }
 
 // Creates image from specified image data.
 // Returns handle to the image.
-CreateImageRgba :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, data: []byte) -> int {
+CreateImageRGBA :: proc(ctx: ^Context, w, h: int, image_flags: Image_Flags, data: []byte) -> int {
 	assert(ctx.params.render_create_texture != nil)
 	return ctx.params.render_create_texture(
 		ctx.params.user_ptr,
@@ -2252,17 +2263,17 @@ BeginPath :: proc(ctx: ^Context) {
 }
 
 @(deferred_in=Fill)
-BeginFill :: proc(ctx: ^Context) {
+FillScoped :: proc(ctx: ^Context) {
 	BeginPath(ctx)
 }
 
 @(deferred_in=Stroke)
-BeginStroke :: proc(ctx: ^Context) {
+StrokeScoped :: proc(ctx: ^Context) {
 	BeginPath(ctx)
 }
 
 @(deferred_in=Stroke)
-BeginFillStroke :: proc(ctx: ^Context) {
+FillStrokeScoped :: proc(ctx: ^Context) {
 	BeginPath(ctx)		
 }
 
