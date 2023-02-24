@@ -333,6 +333,7 @@ DeleteInternal :: proc(ctx: ^Context) {
 		ctx.params.renderDelete(ctx.params.userPtr)
 	}
 
+	delete(ctx.commands)
 	free(ctx)
 }
 
